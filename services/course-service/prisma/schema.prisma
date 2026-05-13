@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LessonType {
+  VIDEO
+  PDF
+  MARKDOWN
+  TEXT
+  LIVE
+  QUIZ
+}
+
+enum InteractiveBlockType {
+  QUIZ
+  CHECKPOINT
+  INFO
+  ASSIGNMENT
+  AI_PROMPT
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  ORDERING
+  MATCHING
+  SHORT_TEXT
+}
+
+enum ProgressStatus {
+  LOCKED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Course {
+  id           String       @id @default(uuid())
+  title        String
+  slug         String       @unique
+  description  String?
+  thumbnail    String?
+  instructorId String       @map("instructor_id")
+  price        Decimal      @default(0) @db.Decimal(10, 2)
+  level        CourseLevel  @default(BEGINNER)
+  status       CourseStatus @default(DRAFT)
+  tags         String[]     @default([])
+  language     String       @default("mn")
+  totalLessons Int          @default(0) @map("total_lessons")
+  totalMinutes Int          @default(0) @map("total_minutes")
+  passingScore Float        @default(60) @map("passing_score")
+  isSequential Boolean      @default(true) @map("is_sequential")
+  publishedAt  DateTime?    @map("published_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  modules     Module[]
+  enrollments CourseEnrollment[]
+
+  @@index([instructorId])
+  @@index([status])
+  @@index([level])
+  @@map("courses")
+}
+
+model Module {
+  id          String  @id @default(uuid())
+  courseId    String  @map("course_id")
+  title       String
+  description String?
+  sortOrder   Int     @default(0) @map("sort_order")
+  unlockScore Float?  @map("unlock_score")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@index([courseId])
+  @@map("modules")
+}
+
+model Lesson {
+  id               String     @id @default(uuid())
+  moduleId         String     @map("module_id")
+  title            String
+  description      String?
+  lessonType       LessonType @default(TEXT) @map("lesson_type")
+  sortOrder        Int        @default(0) @map("sort_order")
+  contentUrl       String?    @map("content_url")
+  rawMarkdown      String?    @map("raw_markdown")
+  rawText          String?    @map("raw_text")
+  estimatedMinutes Int?       @map("estimated_minutes")
+  isPreview        Boolean    @default(false) @map("is_preview")
+  passingScore     Float      @default(60) @map("passing_score")
+  unlockNextOnPass Boolean    @default(true) @map("unlock_next_on_pass")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  interactiveBlocks  InteractiveBlock[]
+  progresses         LessonProgress[]
+  lessonSkills       LessonSkill[]
+  lessonDependencies LessonDependency[]  @relation("LessonDependencies")
+  requiredBy         LessonDependency[]  @relation("RequiredLesson")
+
+  @@index([moduleId])
+  @@map("lessons")
+}
+
+model InteractiveBlock {
+  id                String               @id @default(uuid())
+  lessonId          String               @map("lesson_id")
+  title             String?
+  blockType         InteractiveBlockType @map("block_type")
+  sortOrder         Int                  @default(0) @map("sort_order")
+  triggerSecond     Int?                 @map("trigger_second")
+  triggerPage       Int?                 @map("trigger_page")
+  triggerParagraph  Int?                 @map("trigger_paragraph")
+  contentJson       Json                 @default("{}") @map("content_json")
+  isRequired        Boolean              @default(true) @map("is_required")
+  passingScore      Float?               @map("passing_score")
+  unlockNextContent Boolean              @default(true) @map("unlock_next_content")
+  continueOnPassOnly Boolean             @default(true) @map("continue_on_pass_only")
+  createdAt         DateTime             @default(now()) @map("created_at")
+
+  lesson     Lesson                    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions  InteractiveQuestion[]
+  progresses InteractiveBlockProgress[]
+
+  @@index([lessonId])
+  @@map("interactive_blocks")
+}
+
+model InteractiveQuestion {
+  id                 String              @id @default(uuid())
+  interactiveBlockId String              @map("interactive_block_id")
+  questionType       QuestionType        @map("question_type")
+  questionText       String              @map("question_text")
+  explanation        String?
+  score              Float               @default(1)
+  sortOrder          Int                 @default(0) @map("sort_order")
+  createdAt          DateTime            @default(now()) @map("created_at")
+
+  interactiveBlock InteractiveBlock            @relation(fields: [interactiveBlockId], references: [id], onDelete: Cascade)
+  options          InteractiveQuestionOption[]
+  answers          InteractiveAnswer[]
+
+  @@index([interactiveBlockId])
+  @@map("interactive_questions")
+}
+
+model InteractiveQuestionOption {
+  id         String  @id @default(uuid())
+  questionId String  @map("question_id")
+  optionText String  @map("option_text")
+  isCorrect  Boolean @default(false) @map("is_correct")
+  sortOrder  Int     @default(0) @map("sort_order")
+
+  question InteractiveQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@map("interactive_question_options")
+}
+
+model CourseEnrollment {
+  id              String    @id @default(uuid())
+  courseId        String    @map("course_id")
+  studentId       String    @map("student_id")
+  progressPercent Float     @default(0) @map("progress_percent")
+  totalScore      Float     @default(0) @map("total_score")
+  completed       Boolean   @default(false)
+  enrolledAt      DateTime  @default(now()) @map("enrolled_at")
+  completedAt     DateTime? @map("completed_at")
+
+  course           Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessonProgresses LessonProgress[]
+
+  @@unique([courseId, studentId])
+  @@index([studentId])
+  @@map("course_enrollments")
+}
+
+model LessonProgress {
+  id              String         @id @default(uuid())
+  enrollmentId    String         @map("enrollment_id")
+  lessonId        String         @map("lesson_id")
+  status          ProgressStatus @default(LOCKED)
+  progressPercent Float          @default(0) @map("progress_percent")
+  score           Float          @default(0)
+  completed       Boolean        @default(false)
+  unlockedAt      DateTime?      @map("unlocked_at")
+  completedAt     DateTime?      @map("completed_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  enrollment      CourseEnrollment          @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson          Lesson                    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  blockProgresses InteractiveBlockProgress[]
+
+  @@unique([enrollmentId, lessonId])
+  @@index([lessonId])
+  @@map("lesson_progresses")
+}
+
+model InteractiveBlockProgress {
+  id                 String    @id @default(uuid())
+  lessonProgressId   String    @map("lesson_progress_id")
+  interactiveBlockId String    @map("interactive_block_id")
+  score              Float     @default(0)
+  passed             Boolean   @default(false)
+  completed          Boolean   @default(false)
+  attempts           Int       @default(0)
+  startedAt          DateTime  @default(now()) @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+
+  lessonProgress   LessonProgress   @relation(fields: [lessonProgressId], references: [id], onDelete: Cascade)
+  interactiveBlock InteractiveBlock @relation(fields: [interactiveBlockId], references: [id], onDelete: Cascade)
+  answers          InteractiveAnswer[]
+
+  @@unique([lessonProgressId, interactiveBlockId])
+  @@map("interactive_block_progresses")
+}
+
+model InteractiveAnswer {
+  id                         String    @id @default(uuid())
+  interactiveBlockProgressId String    @map("interactive_block_progress_id")
+  questionId                 String    @map("question_id")
+  answerText                 String?   @map("answer_text")
+  selectedOptionIds          Json?     @map("selected_option_ids")
+  isCorrect                  Boolean?  @map("is_correct")
+  scoreAwarded               Float     @default(0) @map("score_awarded")
+  answeredAt                 DateTime  @default(now()) @map("answered_at")
+
+  interactiveBlockProgress InteractiveBlockProgress @relation(fields: [interactiveBlockProgressId], references: [id], onDelete: Cascade)
+  question                 InteractiveQuestion      @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@map("interactive_answers")
+}
+
+model LessonDependency {
+  id               String   @id @default(uuid())
+  lessonId         String   @map("lesson_id")
+  requiredLessonId String   @map("required_lesson_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  lesson         Lesson @relation("LessonDependencies", fields: [lessonId], references: [id], onDelete: Cascade)
+  requiredLesson Lesson @relation("RequiredLesson", fields: [requiredLessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, requiredLessonId])
+  @@map("lesson_dependencies")
+}
+
+model Skill {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  category    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  lessonSkills LessonSkill[]
+
+  @@map("skills")
+}
+
+model LessonSkill {
+  id       String @id @default(uuid())
+  lessonId String @map("lesson_id")
+  skillId  String @map("skill_id")
+  weight   Float  @default(1)
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  skill  Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, skillId])
+  @@map("lesson_skills")
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@lms/shared-utils",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared utilities: logger, crypto, pagination, response builder",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "winston": "^3.13.0",
+    "winston-daily-rotate-file": "^5.0.0",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.5"
+  },
+  "peerDependencies": {
+    "@lms/shared-types": "workspace:*"
+  }
+}

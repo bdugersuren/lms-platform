@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "@lms/shared-types": ["../packages/shared-types/src"],
+      "@lms/shared-utils": ["../packages/shared-utils/src"],
+      "@lms/shared-auth": ["../packages/shared-auth/src"],
+      "@lms/shared-config": ["../packages/shared-config/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
