@@ -230,6 +230,173 @@ services:
       start_period: 40s
 
   # ---------------------------------------------------------------------------
+  # Enrollment Service — enrollments & progress tracking
+  # ---------------------------------------------------------------------------
+  enrollment-service:
+    build:
+      context: .
+      dockerfile: services/enrollment-service/Dockerfile
+      target: runner
+    container_name: lms-enrollment-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${ENROLLMENT_PORT:-3004}
+      NODE_ENV: ${ENROLLMENT_NODE_ENV:-development}
+      DATABASE_URL: ${ENROLLMENT_DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      COURSE_SERVICE_URL: http://course-service:3003
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
+    ports:
+      - "3004:3004"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      course-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3004/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Wallet Service — wallet, transactions, revenue sharing, payouts
+  # IMPORTANT: Financial logic MUST be isolated.
+  # ---------------------------------------------------------------------------
+  wallet-service:
+    build:
+      context: .
+      dockerfile: services/wallet-service/Dockerfile
+      target: runner
+    container_name: lms-wallet-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${WALLET_PORT:-3007}
+      NODE_ENV: ${WALLET_NODE_ENV:-development}
+      DATABASE_URL: ${WALLET_DATABASE_URL}
+    ports:
+      - "3007:3007"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3007/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Payment Service — QPay, SocialPay, payment verification, webhook handling
+  # ---------------------------------------------------------------------------
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+      target: runner
+    container_name: lms-payment-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${PAYMENT_PORT:-3008}
+      NODE_ENV: ${PAYMENT_NODE_ENV:-development}
+      DATABASE_URL: ${PAYMENT_DATABASE_URL}
+    ports:
+      - "3008:3008"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3008/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Assignment Service — assignments, grading, submissions
+  # ---------------------------------------------------------------------------
+  assignment-service:
+    build:
+      context: .
+      dockerfile: services/assignment-service/Dockerfile
+      target: runner
+    container_name: lms-assignment-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${ASSIGNMENT_PORT:-3006}
+      NODE_ENV: ${ASSIGNMENT_NODE_ENV:-development}
+      DATABASE_URL: ${ASSIGNMENT_DATABASE_URL}
+    ports:
+      - "3006:3006"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3006/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Quiz Service — quizzes, adaptive exams, question bank, submissions
+  # ---------------------------------------------------------------------------
+  quiz-service:
+    build:
+      context: .
+      dockerfile: services/quiz-service/Dockerfile
+      target: runner
+    container_name: lms-quiz-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${QUIZ_PORT:-3005}
+      NODE_ENV: ${QUIZ_NODE_ENV:-development}
+      DATABASE_URL: ${QUIZ_DATABASE_URL}
+    ports:
+      - "3005:3005"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3005/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
   # Auth Service — authentication & authorization
   # ---------------------------------------------------------------------------
   auth-service:

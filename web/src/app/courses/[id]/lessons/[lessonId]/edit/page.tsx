@@ -174,9 +174,15 @@ export default function LessonEditPage() {
     );
   };
 
-  const needsUrl = lessonType === 'VIDEO' || lessonType === 'PDF' || lessonType === 'LIVE';
-  const needsMarkdown = lessonType === 'MARKDOWN';
-  const needsText = lessonType === 'TEXT';
+  // Which fields are relevant per lesson type
+  const showDuration   = lessonType === 'VIDEO' || lessonType === 'LIVE' || lessonType === 'QUIZ';
+  const showScoring    = lessonType === 'VIDEO' || lessonType === 'PDF'  || lessonType === 'QUIZ';
+
+  const DURATION_LABEL: Partial<Record<LessonType, string>> = {
+    VIDEO: 'Видео хугацаа (мин)',
+    LIVE:  'Шууд нэвтрэлтийн хугацаа (мин)',
+    QUIZ:  'Тестийн хугацааны хязгаар (мин)',
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -195,23 +201,28 @@ export default function LessonEditPage() {
             <span className="text-slate-300 hidden sm:block">/</span>
             <span className="font-medium text-slate-700 truncate">{lesson.title}</span>
           </div>
-          <div className="shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {isDirty && (
               <span className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-1 rounded-full">
                 Хадгалаагүй өөрчлөлт
               </span>
             )}
+            <Link
+              href={`/courses/${courseId}/lessons/${lessonId}`}
+              className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Урьдчилан харах ▶
+            </Link>
           </div>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-        {/* Section 1: Lesson content form */}
         <section className="bg-white rounded-xl border border-slate-200 p-6">
           <h2 className="text-base font-bold text-slate-900 mb-6">Хичээлийн мэдээлэл</h2>
           <form onSubmit={handleSubmit} className="space-y-5">
 
-            {/* Title */}
+            {/* ── Үндсэн мэдээлэл ──────────────────────────────────────────── */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Гарчиг <span className="text-red-500">*</span>
@@ -227,7 +238,6 @@ export default function LessonEditPage() {
               <p className="text-xs text-slate-400 mt-1">{title.length}/200</p>
             </div>
 
-            {/* Description */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Тайлбар</label>
               <textarea
@@ -241,8 +251,8 @@ export default function LessonEditPage() {
               <p className="text-xs text-slate-400 mt-1">{description.length}/500</p>
             </div>
 
-            {/* Lesson type + sort order */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Хичээлийн төрөл + дэс дугаар + үнэгүй */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Хичээлийн төрөл</label>
                 <select
@@ -265,22 +275,7 @@ export default function LessonEditPage() {
                   min="1"
                 />
               </div>
-            </div>
-
-            {/* Estimated minutes + isPreview */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Хугацаа (мин)</label>
-                <input
-                  type="number"
-                  value={estimatedMinutes}
-                  onChange={(e) => setEstimatedMinutes(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Тооцоолсон минут"
-                  min="1"
-                />
-              </div>
-              <div className="flex items-end pb-1">
+              <div className="flex items-end pb-2">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -293,49 +288,91 @@ export default function LessonEditPage() {
               </div>
             </div>
 
-            {/* Passing score + unlockNextOnPass */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            {/* ── Хугацаа — зөвхөн VIDEO / LIVE / QUIZ ──────────────────── */}
+            {showDuration && (
+              <div className="max-w-xs">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Дараагийг нээх оноо (0-100)
+                  {DURATION_LABEL[lessonType] ?? 'Хугацаа (мин)'}
                 </label>
                 <input
                   type="number"
-                  value={passingScore}
-                  onChange={(e) => setPassingScore(e.target.value)}
+                  value={estimatedMinutes}
+                  onChange={(e) => setEstimatedMinutes(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  min="0"
-                  max="100"
+                  placeholder="0"
+                  min="1"
                 />
               </div>
-              <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={unlockNextOnPass}
-                    onChange={(e) => setUnlockNextOnPass(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-300 accent-indigo-600"
-                  />
-                  <span className="text-sm font-medium text-slate-700">Дааврыг биелүүлбэл дараагийг нээх</span>
-                </label>
-              </div>
-            </div>
+            )}
 
-            {/* Content field based on lesson type */}
-            {needsUrl && (
+            {/* ── Дүн тохиргоо — зөвхөн VIDEO / PDF / QUIZ ─────────────── */}
+            {showScoring && (
+              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="col-span-2">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Дүн / давалгаа</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Дараагийг нээх оноо (0–100)
+                  </label>
+                  <input
+                    type="number"
+                    value={passingScore}
+                    onChange={(e) => setPassingScore(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    min="0"
+                    max="100"
+                  />
+                </div>
+                <div className="flex items-end pb-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={unlockNextOnPass}
+                      onChange={(e) => setUnlockNextOnPass(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 accent-indigo-600"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Дааврыг биелүүлбэл дараагийг нээх</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* ── Контент — төрлөөс хамаарна ───────────────────────────── */}
+            {lessonType === 'VIDEO' && (
+              <FileUpload
+                accept="video"
+                value={contentUrl}
+                onChange={setContentUrl}
+                label="Видео файл (MP4, WebM · YouTube / Vimeo холбоос ч болно)"
+                maxMb={500}
+              />
+            )}
+
+            {lessonType === 'PDF' && (
+              <FileUpload
+                accept="pdf"
+                value={contentUrl}
+                onChange={setContentUrl}
+                label="PDF файл"
+                maxMb={100}
+              />
+            )}
+
+            {lessonType === 'LIVE' && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Контентийн URL</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Шууд дамжуулалтын URL</label>
                 <input
                   type="url"
                   value={contentUrl}
                   onChange={(e) => setContentUrl(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="https://..."
+                  placeholder="https://meet.google.com/... эсвэл Zoom холбоос"
                 />
               </div>
             )}
 
-            {needsMarkdown && (
+            {lessonType === 'MARKDOWN' && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Markdown контент</label>
                 <textarea
@@ -343,12 +380,12 @@ export default function LessonEditPage() {
                   onChange={(e) => setRawMarkdown(e.target.value)}
                   rows={20}
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono resize-y"
-                  placeholder="# Гарчиг&#10;&#10;Контентоо энд бичнэ үү..."
+                  placeholder={'# Гарчиг\n\nКонтентоо энд бичнэ үү...'}
                 />
               </div>
             )}
 
-            {needsText && (
+            {lessonType === 'TEXT' && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Текст контент</label>
                 <textarea
@@ -363,7 +400,7 @@ export default function LessonEditPage() {
 
             {lessonType === 'QUIZ' && (
               <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-                Хичээлийн контент нь интерактив блокуудаас бүрдэнэ
+                ✅ Тестийн контент нь доорх <strong>Интерактив блокуудаас</strong> бүрдэнэ
               </div>
             )}
 
@@ -379,7 +416,6 @@ export default function LessonEditPage() {
               </div>
             )}
 
-            {/* Save button */}
             <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
               <button
                 type="submit"
@@ -399,39 +435,7 @@ export default function LessonEditPage() {
         </section>
 
         {/* Section 2: Interactive blocks */}
-        <section className="bg-white rounded-xl border border-slate-200 p-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-base font-bold text-slate-900">Интерактив блокууд</h2>
-            {!addingBlock && (
-              <button
-                onClick={() => setAddingBlock(true)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-              >
-                + Блок нэмэх
-              </button>
-            )}
-          </div>
-
-          {blocksLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {sortedBlocks.length === 0 && !addingBlock && (
-                <p className="text-sm text-slate-400 text-center py-6">
-                  Интерактив блок байхгүй байна
-                </p>
-              )}
-              {sortedBlocks.map((block) => (
-                <BlockCard key={block.id} block={block} lessonId={lessonId} />
-              ))}
-              {addingBlock && (
-                <AddBlockForm lessonId={lessonId} onClose={() => setAddingBlock(false)} />
-              )}
-            </div>
-          )}
-        </section>
+        <InteractiveBlocksEditor lessonId={lessonId} />
       </main>
     </div>
   );

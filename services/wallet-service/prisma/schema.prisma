@@ -1,0 +1,123 @@
+// Wallet Service — Prisma Schema
+// Database: wallet_db
+// IMPORTANT: Financial logic MUST be isolated. Never share across services.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WalletStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum TransactionType {
+  CREDIT          // Орлого нэмэх
+  DEBIT           // Зарцуулалт
+  REVENUE_SHARE   // Орлого хуваалцах (instructor)
+  PAYOUT          // Гадагш гаргах
+  REFUND          // Буцаалт
+  PLATFORM_FEE    // Платформ хураамж
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  REJECTED
+}
+
+model Wallet {
+  id        String       @id @default(uuid())
+  ownerId   String       @unique @map("owner_id")
+  ownerType String       @default("USER") @map("owner_type")
+  balance   Decimal      @default(0) @db.Decimal(18, 2)
+  currency  String       @default("MNT")
+  status    WalletStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  transactions Transaction[]
+  payouts      Payout[]
+  revenueShares RevenueShare[]
+
+  @@index([ownerId])
+  @@map("wallets")
+}
+
+model Transaction {
+  id          String            @id @default(uuid())
+  walletId    String            @map("wallet_id")
+  type        TransactionType
+  status      TransactionStatus @default(PENDING)
+  amount      Decimal           @db.Decimal(18, 2)
+  balanceBefore Decimal         @map("balance_before") @db.Decimal(18, 2)
+  balanceAfter  Decimal         @map("balance_after") @db.Decimal(18, 2)
+  currency    String            @default("MNT")
+  description String?
+  reference   String?           // External reference (payment ID, etc.)
+  metadata    Json?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([reference])
+  @@index([type])
+  @@map("transactions")
+}
+
+model RevenueShare {
+  id           String   @id @default(uuid())
+  walletId     String   @map("wallet_id")
+  courseId     String   @map("course_id")
+  enrollmentId String   @map("enrollment_id")
+  grossAmount  Decimal  @map("gross_amount") @db.Decimal(18, 2)
+  platformFee  Decimal  @map("platform_fee") @db.Decimal(18, 2)
+  netAmount    Decimal  @map("net_amount") @db.Decimal(18, 2)
+  feePercent   Decimal  @map("fee_percent") @db.Decimal(5, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@unique([enrollmentId])
+  @@index([walletId])
+  @@index([courseId])
+  @@map("revenue_shares")
+}
+
+model Payout {
+  id            String       @id @default(uuid())
+  walletId      String       @map("wallet_id")
+  amount        Decimal      @db.Decimal(18, 2)
+  currency      String       @default("MNT")
+  status        PayoutStatus @default(PENDING)
+  bankName      String?      @map("bank_name")
+  accountNumber String?      @map("account_number")
+  accountName   String?      @map("account_name")
+  note          String?
+  processedAt   DateTime?    @map("processed_at")
+  rejectedReason String?     @map("rejected_reason")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([status])
+  @@map("payouts")
+}

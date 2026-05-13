@@ -39,7 +39,6 @@ export function useUpload() {
               setState(s => ({ ...s, progress: Math.round((e.loaded / e.total!) * 100) }));
             }
           },
-          baseURL: typeof window !== 'undefined' ? window.location.origin : undefined,
         })
           .then((res) => {
             setState({ progress: 100, uploading: false, error: null });

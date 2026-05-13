@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCourse, usePublishCourse, useArchiveCourse, useDeleteCourse } from '@/hooks/use-courses';
+import { useCheckEnrollment, useEnroll, useUnenroll, useEnrollmentByCourse } from '@/hooks/use-enrollment';
 import { useAuthStore } from '@/store/auth.store';
 import type { CourseModule } from '@/types/course';
 import { clsx } from 'clsx';
@@ -25,13 +26,37 @@ export default function CourseDetailPage() {
   const deleteCourse = useDeleteCourse();
   const { user } = useAuthStore();
 
+  const { data: enrollmentCheck } = useCheckEnrollment(id);
+  const { data: enrollment } = useEnrollmentByCourse(enrollmentCheck?.enrolled ? id : null);
+  const enroll = useEnroll();
+  const unenroll = useUnenroll();
+
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState('');
+  const [enrollError, setEnrollError] = useState('');
 
   const course = data?.data;
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const isOwner = course?.instructorId === user?.id;
   const canManage = isOwner || isAdmin;
+  const isEnrolled = enrollmentCheck?.enrolled ?? false;
+  const isStudent = user?.role === 'STUDENT';
+
+  const handleEnroll = () => {
+    setEnrollError('');
+    enroll.mutate(id, {
+      onError: (err) => setEnrollError(err.message),
+    });
+  };
+
+  const handleUnenroll = () => {
+    if (!enrollment?.id) return;
+    if (!confirm('Бүртгэлээ цуцлах уу?')) return;
+    setEnrollError('');
+    unenroll.mutate(enrollment.id, {
+      onError: (err) => setEnrollError(err.message),
+    });
+  };
 
   const toggleModule = (moduleId: string) => {
     setExpandedModules((prev) => {
@@ -150,7 +175,13 @@ export default function CourseDetailPage() {
                   href={`/courses/${id}/edit`}
                   className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
                 >
-                  Edit
+                  Засах
+                </Link>
+                <Link
+                  href={`/courses/${id}/manage`}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors"
+                >
+                  Агуулга удирдах
                 </Link>
                 <button
                   onClick={handleDelete}
@@ -206,22 +237,24 @@ export default function CourseDetailPage() {
                             <p className="px-6 py-3 text-sm text-slate-400">No lessons yet</p>
                           ) : (
                             mod.lessons.map((lesson) => (
-                              <div
+                              <Link
                                 key={lesson.id}
-                                className="flex items-center gap-3 px-6 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50"
+                                href={`/courses/${id}/lessons/${lesson.id}`}
+                                className="flex items-center gap-3 px-6 py-3 border-b border-slate-50 last:border-0 hover:bg-indigo-50 transition-colors group"
                               >
                                 <span className="text-slate-300 text-xs w-5 text-center">{lesson.sortOrder}</span>
-                                <span className="text-sm text-slate-600 flex-1">{lesson.title}</span>
+                                <span className="text-sm text-slate-600 flex-1 group-hover:text-indigo-700 transition-colors">{lesson.title}</span>
                                 <div className="flex items-center gap-2">
                                   {lesson.isPreview && (
-                                    <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">Free</span>
+                                    <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">Үнэгүй</span>
                                   )}
                                   <span className="text-xs text-slate-400">{lesson.lessonType}</span>
                                   {lesson.estimatedMinutes != null && lesson.estimatedMinutes > 0 && (
-                                    <span className="text-xs text-slate-400">{lesson.estimatedMinutes}m</span>
+                                    <span className="text-xs text-slate-400">{lesson.estimatedMinutes}м</span>
                                   )}
+                                  <span className="text-slate-300 text-xs opacity-0 group-hover:opacity-100 transition-opacity">▶</span>
                                 </div>
-                              </div>
+                              </Link>
                             ))
                           )}
                         </div>
@@ -274,10 +307,54 @@ export default function CourseDetailPage() {
                   </div>
                 </div>
 
-                {course.status === 'PUBLISHED' && (
-                  <button className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors">
-                    Enroll Now
-                  </button>
+                {enrollError && (
+                  <p className="text-red-500 text-xs">{enrollError}</p>
+                )}
+
+                {course.status === 'PUBLISHED' && isStudent && !canManage && (
+                  isEnrolled ? (
+                    <div className="space-y-2">
+                      <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-indigo-600 h-2 rounded-full transition-all"
+                          style={{ width: `${enrollment?.progressPercent ?? 0}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-500 text-center">
+                        {enrollment?.progressPercent ?? 0}% дууссан
+                      </p>
+                      <Link
+                        href={`/dashboard/my-courses`}
+                        className="block w-full py-2.5 bg-indigo-600 text-white rounded-lg font-semibold text-center hover:bg-indigo-700 transition-colors text-sm"
+                      >
+                        Үргэлжлүүлэх
+                      </Link>
+                      <button
+                        onClick={handleUnenroll}
+                        disabled={unenroll.isPending}
+                        className="w-full py-2 text-slate-500 text-sm hover:text-red-600 transition-colors"
+                      >
+                        {unenroll.isPending ? 'Цуцалж байна...' : 'Бүртгэл цуцлах'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleEnroll}
+                      disabled={enroll.isPending}
+                      className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+                    >
+                      {enroll.isPending ? 'Бүртгүүлж байна...' : 'Бүртгүүлэх'}
+                    </button>
+                  )
+                )}
+
+                {canManage && (
+                  <Link
+                    href={`/courses/${id}/manage`}
+                    className="block w-full py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium text-center hover:bg-slate-200 transition-colors text-sm"
+                  >
+                    Агуулга удирдах
+                  </Link>
                 )}
               </div>
             </div>

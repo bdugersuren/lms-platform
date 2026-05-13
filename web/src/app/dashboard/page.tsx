@@ -156,6 +156,54 @@ export default function DashboardPage() {
                   <p className="text-xs text-slate-400">Курс харах</p>
                 </div>
               </Link>
+              <Link
+                href="/assignments"
+                className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-indigo-200 hover:shadow-md transition-all group"
+              >
+                <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center group-hover:bg-orange-100 transition-colors">
+                  <span className="text-xl">📋</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Даалгавар</p>
+                  <p className="text-xs text-slate-400">Ажил илгээх</p>
+                </div>
+              </Link>
+              <Link
+                href="/quizzes"
+                className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-indigo-200 hover:shadow-md transition-all group"
+              >
+                <div className="w-10 h-10 bg-violet-50 rounded-lg flex items-center justify-center group-hover:bg-violet-100 transition-colors">
+                  <span className="text-xl">📝</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Тестүүд</p>
+                  <p className="text-xs text-slate-400">Шалгалт өгөх</p>
+                </div>
+              </Link>
+              <Link
+                href="/wallet"
+                className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-indigo-200 hover:shadow-md transition-all group"
+              >
+                <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
+                  <span className="text-xl">💳</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Хэтэвч</p>
+                  <p className="text-xs text-slate-400">Орлого харах</p>
+                </div>
+              </Link>
+              <Link
+                href="/payments"
+                className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-indigo-200 hover:shadow-md transition-all group"
+              >
+                <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center group-hover:bg-green-100 transition-colors">
+                  <span className="text-xl">💰</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Төлбөр</p>
+                  <p className="text-xs text-slate-400">QPay / SocialPay</p>
+                </div>
+              </Link>
               {(user.role === 'INSTRUCTOR' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && (
                 <>
                   <Link

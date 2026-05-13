@@ -1,7 +1,8 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as Minio from 'minio';
 import { randomUUID } from 'crypto';
 import path from 'path';
+import { Readable } from 'stream';
 
 const BUCKET = 'lms-media';
 
@@ -41,25 +42,31 @@ export class MediaService implements OnModuleInit {
       const exists = await this.client.bucketExists(BUCKET);
       if (!exists) {
         await this.client.makeBucket(BUCKET, 'us-east-1');
-        const policy = JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [{
-            Effect: 'Allow',
-            Principal: { AWS: ['*'] },
-            Action: ['s3:GetObject'],
-            Resource: [`arn:aws:s3:::${BUCKET}/*`],
-          }],
-        });
-        await this.client.setBucketPolicy(BUCKET, policy);
-        this.logger.log(`Bucket '${BUCKET}' created with public read policy`);
+        this.logger.log(`Bucket '${BUCKET}' created (private — presigned URLs required)`);
       }
     } catch (err) {
       this.logger.error('Failed to initialise MinIO bucket', err);
     }
   }
 
+  async presign(key: string): Promise<string> {
+    return this.client.presignedGetObject(BUCKET, key, 7200); // 2 hours
+  }
+
+  parseKeyFromUrl(rawUrl: string): string {
+    const bucketPrefix = `${this.publicUrl}/${BUCKET}/`;
+    if (rawUrl.startsWith(bucketPrefix)) {
+      return rawUrl.slice(bucketPrefix.length);
+    }
+    // Already a bare key (e.g. "videos/abc.mp4")
+    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+      return rawUrl;
+    }
+    throw new BadRequestException(`Cannot resolve object key from URL: ${rawUrl}`);
+  }
+
   async upload(
-    stream: NodeJS.ReadableStream,
+    stream: Readable,
     originalName: string,
     mimeType: string,
     size: number,

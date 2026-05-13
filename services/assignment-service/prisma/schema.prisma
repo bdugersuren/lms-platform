@@ -1,0 +1,94 @@
+// Assignment Service — Prisma Schema
+// Database: assignment_db
+// Each service owns its own schema. Never share across services.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssignmentType {
+  FILE_UPLOAD
+  TEXT
+  LINK
+  CODE
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  GRADED
+  RETURNED
+}
+
+enum GradeStatus {
+  PENDING
+  GRADED
+  APPEALED
+}
+
+model Assignment {
+  id          String         @id @default(uuid())
+  courseId    String         @map("course_id")
+  lessonId    String?        @map("lesson_id")
+  title       String
+  description String?
+  type        AssignmentType @default(TEXT)
+  maxScore    Float          @default(100) @map("max_score")
+  passingScore Float         @default(60) @map("passing_score")
+  dueDate     DateTime?      @map("due_date")
+  isPublished Boolean        @default(false) @map("is_published")
+  allowLate   Boolean        @default(false) @map("allow_late")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  submissions Submission[]
+
+  @@index([courseId])
+  @@index([lessonId])
+  @@map("assignments")
+}
+
+model Submission {
+  id           String           @id @default(uuid())
+  assignmentId String           @map("assignment_id")
+  studentId    String           @map("student_id")
+  status       SubmissionStatus @default(DRAFT)
+  content      String?
+  fileUrls     String[]         @map("file_urls")
+  linkUrl      String?          @map("link_url")
+  submittedAt  DateTime?        @map("submitted_at")
+  isLate       Boolean          @default(false) @map("is_late")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  grade      Grade?
+
+  @@unique([assignmentId, studentId])
+  @@index([assignmentId])
+  @@index([studentId])
+  @@map("submissions")
+}
+
+model Grade {
+  id           String      @id @default(uuid())
+  submissionId String      @unique @map("submission_id")
+  gradedBy     String      @map("graded_by")
+  score        Float
+  maxScore     Float       @map("max_score")
+  feedback     String?
+  status       GradeStatus @default(GRADED)
+  gradedAt     DateTime    @default(now()) @map("graded_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("grades")
+}

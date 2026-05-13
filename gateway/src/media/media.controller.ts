@@ -1,6 +1,8 @@
 import {
   Controller,
+  Get,
   Post,
+  Query,
   Req,
   UseGuards,
   BadRequestException,
@@ -19,6 +21,18 @@ const MAX_SIZE = 500 * 1024 * 1024; // 500 MB
 @Controller('media')
 export class MediaController {
   constructor(private readonly media: MediaService) {}
+
+  @Get('presign')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Generate a 2-hour presigned URL for a private media object' })
+  async presign(@Query('src') src: string) {
+    if (!src) throw new BadRequestException('src query param is required');
+    const key = this.media.parseKeyFromUrl(src);
+    const presignedUrl = await this.media.presign(key);
+    const expiresAt = new Date(Date.now() + 7200 * 1000).toISOString();
+    return ApiResponseBuilder.success({ presignedUrl, expiresAt }, 'Presigned URL generated');
+  }
 
   @Post('upload')
   @UseGuards(JwtAuthGuard, RolesGuard)

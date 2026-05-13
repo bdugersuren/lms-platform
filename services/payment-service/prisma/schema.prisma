@@ -1,0 +1,80 @@
+// Payment Service — Prisma Schema
+// Database: payment_db
+// Responsibilities: QPay, SocialPay, payment verification, webhook handling
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentProvider {
+  QPAY
+  SOCIAL_PAY
+}
+
+enum PaymentStatus {
+  PENDING     // Created, awaiting user action
+  PROCESSING  // User initiated, awaiting confirmation
+  COMPLETED   // Payment confirmed
+  FAILED      // Payment failed
+  REFUNDED    // Payment refunded
+  CANCELLED   // Cancelled by user or expiry
+}
+
+model Payment {
+  id          String          @id @default(uuid())
+  userId      String          @map("user_id")
+  courseId    String          @map("course_id")
+  amount      Decimal         @db.Decimal(18, 2)
+  currency    String          @default("MNT")
+  provider    PaymentProvider
+  status      PaymentStatus   @default(PENDING)
+
+  // QPay specific
+  invoiceId   String?         @unique @map("invoice_id")
+  qrCode      String?         @map("qr_code")      // Raw QR data
+  qrImage     String?         @map("qr_image")     // Base64 QR image
+  deepLinks   Json?           @map("deep_links")   // App deep-link list
+
+  // SocialPay specific
+  checkoutUrl String?         @map("checkout_url")
+
+  // Verification
+  externalRef String?         @map("external_ref") // Provider transaction ref
+  description String?
+  metadata    Json?
+
+  expiredAt   DateTime?       @map("expired_at")
+  completedAt DateTime?       @map("completed_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  webhookLogs WebhookLog[]
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([status])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+model WebhookLog {
+  id         String   @id @default(uuid())
+  provider   String
+  paymentId  String?  @map("payment_id")
+  eventType  String   @map("event_type")
+  payload    Json
+  processed  Boolean  @default(false)
+  error      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@index([provider])
+  @@map("webhook_logs")
+}
