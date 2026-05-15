@@ -2,7 +2,7 @@
   "name": "@lms/course-service",
   "version": "0.1.0",
   "private": true,
-  "description": "LMS Course Service — courses, modules, lessons, curriculum",
+  "description": "LMS Course Service \u2014 courses, modules, lessons, curriculum",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -11,6 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "seed": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "lint": "eslint src --ext .ts",
     "test": "jest",
@@ -52,5 +53,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.4.5"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }

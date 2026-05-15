@@ -2,7 +2,7 @@
   "name": "@lms/enrollment-service",
   "version": "0.1.0",
   "private": true,
-  "description": "LMS Enrollment Service — enrollments, progress tracking, completion tracking",
+  "description": "LMS Enrollment Service \u2014 enrollments, progress tracking, completion tracking",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -11,6 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "seed": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist"
@@ -51,5 +52,8 @@
     "@types/passport-jwt": "^4.0.1",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.5.3"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }

@@ -2,7 +2,7 @@
   "name": "@lms/certificate-service",
   "version": "0.1.0",
   "private": true,
-  "description": "LMS Certificate Service — generation, QR verification, public validation",
+  "description": "LMS Certificate Service \u2014 generation, QR verification, public validation",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -11,6 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "seed": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist"
@@ -56,5 +57,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.5.3"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }
