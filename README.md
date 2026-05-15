@@ -71,3 +71,19 @@ Auth-service — all endpoints tested end-to-end through the gateway:
 |14|PATCH|/api/auth/users/:id/status reactivate|✓ User reactivated|
 
 The key architectural fix: user-level blacklist now stores the revocation Unix timestamp instead of '1', so tokens issued after a logout-all or change-password are accepted while tokens issued before are rejected.
+
+
+
+
+
+```
+# Docker container дотор migration
+bash scripts/docker-migrate.sh
+
+# HOST-оос seed (postgres port нээлттэй байх ёстой)
+bash scripts/docker-seed.sh
+
+# Локал (pnpm + Node.js шаардлагатай)
+pnpm run seed
+
+```
