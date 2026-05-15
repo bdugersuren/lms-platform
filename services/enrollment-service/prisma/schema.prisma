@@ -22,12 +22,14 @@ model Enrollment {
   completed       Boolean   @default(false)
   enrolledAt      DateTime  @default(now()) @map("enrolled_at")
   completedAt     DateTime? @map("completed_at")
+  paymentId       String?   @map("payment_id")
 
   lessonProgresses LessonProgress[]
 
   @@unique([courseId, studentId])
   @@index([studentId])
   @@index([courseId])
+  @@index([paymentId])
   @@map("enrollments")
 }
 

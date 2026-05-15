@@ -20,6 +20,7 @@ const StatusMeta: Record<PaymentStatus, { label: string; cls: string; icon: stri
 const ProviderMeta: Record<PaymentProvider, { label: string; color: string }> = {
   QPAY:       { label: 'QPay',       color: 'text-indigo-600' },
   SOCIAL_PAY: { label: 'SocialPay',  color: 'text-blue-600' },
+  MOCK:       { label: '🧪 Mock',    color: 'text-emerald-600' },
 };
 
 function fmt(amount: string | number) {

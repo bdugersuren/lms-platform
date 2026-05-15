@@ -4,6 +4,7 @@ import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 
 export enum PaymentProviderDto {
   QPAY = 'QPAY',
   SOCIAL_PAY = 'SOCIAL_PAY',
+  MOCK = 'MOCK',
 }
 
 export class CreatePaymentDto {

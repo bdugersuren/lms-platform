@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { usePayment, useCheckPayment, useSimulatePayment } from '@/hooks/use-payment';
+import { usePayment, useCheckPayment, useSimulatePayment, useMockPay } from '@/hooks/use-payment';
 import { clsx } from 'clsx';
 import type { PaymentStatus } from '@/types/payment';
 
@@ -34,6 +34,7 @@ export default function PaymentDetailPage() {
   const { data: payment, isLoading, refetch } = usePayment(id);
   const checkPayment = useCheckPayment();
   const simulatePayment = useSimulatePayment();
+  const mockPay = useMockPay();
 
   const isActive = payment?.status === 'PROCESSING' || payment?.status === 'PENDING';
 
@@ -54,7 +55,7 @@ export default function PaymentDetailPage() {
     checkPayment.mutate(id, {
       onSuccess: (updated) => {
         if (updated.status === 'COMPLETED') {
-          router.push('/payments?result=success');
+          router.push(`/courses/${updated.courseId}`);
         }
       },
     });
@@ -65,6 +66,17 @@ export default function PaymentDetailPage() {
       onSuccess: () => {
         setShowSimulateConfirm(false);
         void refetch();
+      },
+    });
+  };
+
+  const handleMockPay = () => {
+    mockPay.mutate(id, {
+      onSuccess: async () => {
+        const result = await refetch();
+        if (result.data?.status === 'COMPLETED' && result.data.courseId) {
+          router.push(`/courses/${result.data.courseId}`);
+        }
       },
     });
   };
@@ -139,9 +151,11 @@ export default function PaymentDetailPage() {
             <h2 className="text-sm font-semibold text-gray-700">Төлбөрийн мэдээлэл</h2>
             <span className={clsx(
               'text-xs font-medium px-2 py-0.5 rounded-full',
-              payment.provider === 'QPAY' ? 'bg-indigo-50 text-indigo-700' : 'bg-blue-50 text-blue-700',
+              payment.provider === 'QPAY' ? 'bg-indigo-50 text-indigo-700'
+                : payment.provider === 'MOCK' ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-blue-50 text-blue-700',
             )}>
-              {payment.provider === 'QPAY' ? 'QPay' : 'SocialPay'}
+              {payment.provider === 'QPAY' ? 'QPay' : payment.provider === 'MOCK' ? '🧪 Mock' : 'SocialPay'}
             </span>
           </div>
           <div className="text-center py-2 mb-4">
@@ -247,6 +261,39 @@ export default function PaymentDetailPage() {
           </div>
         )}
 
+        {/* Mock payment panel */}
+        {payment.provider === 'MOCK' && isActive && (
+          <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">🧪</span>
+              <h2 className="text-sm font-semibold text-emerald-800">Mock Provider</h2>
+            </div>
+            <p className="text-xs text-emerald-700 mb-5">
+              Энэ бол тест орчны төлбөр. Доорх товчийг дарахад төлбөр шууд амжилттай болно.
+            </p>
+            <button
+              onClick={handleMockPay}
+              disabled={mockPay.isPending}
+              className={clsx(
+                'w-full py-3.5 rounded-xl text-sm font-bold transition-all',
+                mockPay.isPending
+                  ? 'bg-emerald-300 text-white cursor-not-allowed'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.98] shadow-md shadow-emerald-200',
+              )}
+            >
+              {mockPay.isPending ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Боловсруулж байна…
+                </span>
+              ) : '💳 Одоо төлөх (Mock)'}
+            </button>
+          </div>
+        )}
+
         {/* Action buttons */}
         {isActive && (
           <div className="space-y-3">
@@ -309,13 +356,23 @@ export default function PaymentDetailPage() {
           <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center">
             <p className="text-4xl mb-2">🎉</p>
             <p className="font-bold text-green-700 mb-1">Төлбөр амжилттай!</p>
-            <p className="text-sm text-green-600 mb-4">Таны сургалтад элссэн байна</p>
-            <Link
-              href="/courses"
-              className="inline-block px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors"
-            >
-              Сургалт руу очих →
-            </Link>
+            <p className="text-sm text-green-600 mb-4">
+              Таны сургалтад элссэн байна. Хэдэн секундын дотор нэвтрэх боломжтой болно.
+            </p>
+            <div className="flex flex-col gap-2">
+              <Link
+                href={`/courses/${payment.courseId}`}
+                className="inline-block px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors"
+              >
+                Сургалт руу очих →
+              </Link>
+              <Link
+                href="/payments"
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Төлбөрийн түүх харах
+              </Link>
+            </div>
           </div>
         )}
 

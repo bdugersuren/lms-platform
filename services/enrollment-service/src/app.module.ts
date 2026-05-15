@@ -9,6 +9,7 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { CourseClientModule } from './course-client/course-client.module';
 import { EnrollmentModule } from './enrollment/enrollment.module';
+import { EventListenerModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { EnrollmentModule } from './enrollment/enrollment.module';
     AuthModule,
     CourseClientModule,
     EnrollmentModule,
+    EventListenerModule,
   ],
 })
 export class AppModule {}

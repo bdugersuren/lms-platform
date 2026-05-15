@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CertificateStatus {
+  ISSUED
+  REVOKED
+}
+
+model Certificate {
+  id            String            @id @default(uuid())
+  userId        String
+  courseId      String?
+  title         String
+  recipientName String
+  issuerName    String            @default("LMS Platform")
+  description   String?
+  completedAt   DateTime
+  issuedAt      DateTime          @default(now())
+  expiresAt     DateTime?
+  status        CertificateStatus @default(ISSUED)
+  verifyCode    String            @unique @default(uuid())
+  qrCodeUrl     String?
+  metadata      Json?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([verifyCode])
+}

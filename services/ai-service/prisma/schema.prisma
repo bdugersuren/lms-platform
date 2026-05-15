@@ -1,0 +1,72 @@
+// AI Service — Prisma Schema
+// Database: ai_db
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+model ChatSession {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  courseId  String?  @map("course_id")
+  title     String   @default("New Chat")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  messages ChatMessage[]
+
+  @@index([userId])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid())
+  sessionId String      @map("session_id")
+  role      MessageRole
+  content   String
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("chat_messages")
+}
+
+model EssayScore {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  assignmentId   String?  @map("assignment_id")
+  essayText      String   @map("essay_text")
+  score          Float
+  maxScore       Float    @default(100) @map("max_score")
+  feedback       String
+  rubricBreakdown Json?   @map("rubric_breakdown")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([assignmentId])
+  @@map("essay_scores")
+}
+
+model Recommendation {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  courseId   String   @map("course_id")
+  reason     String
+  score      Float    @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("recommendations")
+}

@@ -13,6 +13,7 @@ volumes:
   redis_data:
   rabbitmq_data:
   minio_data:
+  ollama_data:
 
 services:
 
@@ -224,6 +225,233 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3003/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Media Service — video uploads, transcoding, subtitles, MinIO management
+  # ---------------------------------------------------------------------------
+  media-service:
+    build:
+      context: .
+      dockerfile: services/media-service/Dockerfile
+      target: runner
+    container_name: lms-media-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${MEDIA_PORT:-3011}
+      NODE_ENV: ${MEDIA_NODE_ENV:-development}
+      DATABASE_URL: ${MEDIA_DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
+      MINIO_PORT: ${MINIO_PORT:-9000}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-lms-media}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+      UPLOAD_MAX_SIZE_MB: ${UPLOAD_MAX_SIZE_MB:-500}
+      PRESIGN_EXPIRES_SECONDS: ${PRESIGN_EXPIRES_SECONDS:-7200}
+    ports:
+      - "3011:3011"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3011/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Notification Service — email, SMS, push, in-app notifications
+  # ---------------------------------------------------------------------------
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+      target: runner
+    container_name: lms-notification-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${NOTIFICATION_PORT:-3010}
+      NODE_ENV: ${NOTIFICATION_NODE_ENV:-development}
+      DATABASE_URL: ${NOTIFICATION_DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-"LMS Platform <noreply@lms.example.com>"}
+    ports:
+      - "3010:3010"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3010/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Ollama — local LLM inference engine
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: lms-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - lms-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # Certificate Service — generation, QR verification, public validation
+  # ---------------------------------------------------------------------------
+  certificate-service:
+    build:
+      context: .
+      dockerfile: services/certificate-service/Dockerfile
+      target: runner
+    container_name: lms-certificate-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${CERTIFICATE_PORT:-3012}
+      NODE_ENV: ${CERTIFICATE_NODE_ENV:-development}
+      DATABASE_URL: ${CERTIFICATE_DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
+      MINIO_PORT: ${MINIO_PORT:-9000}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-lms-media}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3002}
+    ports:
+      - "3012:3012"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3012/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Analytics Service — KPI, reports, AI analytics, dashboards
+  # ---------------------------------------------------------------------------
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+      target: runner
+    container_name: lms-analytics-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${ANALYTICS_PORT:-3013}
+      NODE_ENV: ${ANALYTICS_NODE_ENV:-development}
+      DATABASE_URL: ${ANALYTICS_DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
+    ports:
+      - "3013:3013"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3013/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # AI Service — AI tutor, essay scoring, recommendations, skill graph
+  # ---------------------------------------------------------------------------
+  ai-service:
+    build:
+      context: .
+      dockerfile: services/ai-service/Dockerfile
+      target: runner
+    container_name: lms-ai-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: ${AI_PORT:-3009}
+      NODE_ENV: ${AI_NODE_ENV:-development}
+      DATABASE_URL: ${AI_DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-120000}
+    ports:
+      - "3009:3009"
+    networks:
+      - lms-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3009/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -1,0 +1,106 @@
+// Media Service — Prisma Schema
+// Database: media_db
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MediaType {
+  VIDEO
+  AUDIO
+  IMAGE
+  PDF
+  DOCUMENT
+  OTHER
+}
+
+enum MediaStatus {
+  UPLOADING
+  READY
+  TRANSCODING
+  FAILED
+  DELETED
+}
+
+enum TranscodeStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum TranscodeFormat {
+  MP4_720P
+  MP4_1080P
+  MP4_480P
+  HLS
+  WEBM
+}
+
+model MediaFile {
+  id           String      @id @default(uuid())
+  userId       String      @map("user_id")
+  key          String      @unique
+  url          String
+  originalName String      @map("original_name")
+  mimeType     String      @map("mime_type")
+  mediaType    MediaType   @map("media_type")
+  size         BigInt
+  status       MediaStatus @default(READY)
+  title        String?
+  description  String?
+  duration     Float?
+  width        Int?
+  height       Int?
+  thumbnail    String?
+  bucket       String      @default("lms-media")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  transcodeJobs TranscodeJob[]
+  subtitles     Subtitle[]
+
+  @@index([userId])
+  @@index([mediaType])
+  @@map("media_files")
+}
+
+model TranscodeJob {
+  id          String          @id @default(uuid())
+  mediaFileId String          @map("media_file_id")
+  format      TranscodeFormat
+  status      TranscodeStatus @default(PENDING)
+  outputKey   String?         @map("output_key")
+  outputUrl   String?         @map("output_url")
+  errorMsg    String?         @map("error_msg")
+  startedAt   DateTime?       @map("started_at")
+  completedAt DateTime?       @map("completed_at")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  mediaFile MediaFile @relation(fields: [mediaFileId], references: [id], onDelete: Cascade)
+
+  @@index([mediaFileId])
+  @@index([status])
+  @@map("transcode_jobs")
+}
+
+model Subtitle {
+  id          String   @id @default(uuid())
+  mediaFileId String   @map("media_file_id")
+  language    String
+  label       String
+  key         String   @unique
+  url         String
+  format      String   @default("vtt")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  mediaFile MediaFile @relation(fields: [mediaFileId], references: [id], onDelete: Cascade)
+
+  @@index([mediaFileId])
+  @@map("subtitles")
+}

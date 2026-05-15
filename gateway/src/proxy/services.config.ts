@@ -7,6 +7,7 @@ export const SERVICE_ROUTES: Record<string, string | undefined> = {
   assignments: process.env.ASSIGNMENT_SERVICE_URL,
   wallet: process.env.WALLET_SERVICE_URL,
   payments: process.env.PAYMENT_SERVICE_URL,
+  webhooks: process.env.PAYMENT_SERVICE_URL,
   ai: process.env.AI_SERVICE_URL,
   notifications: process.env.NOTIFICATION_SERVICE_URL,
   media: process.env.MEDIA_SERVICE_URL,

@@ -1,0 +1,1 @@
+export const AI_RABBITMQ_CLIENT = 'AI_RABBITMQ_CLIENT';

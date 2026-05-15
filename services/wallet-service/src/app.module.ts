@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { HttpModule } from '@nestjs/axios';
 import Joi from 'joi';
 import { appConfig, databaseConfig, jwtConfig, rabbitmqConfig } from '@lms/shared-config';
 import { PrismaModule } from './prisma/prisma.module';
@@ -10,6 +11,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { TransactionModule } from './transaction/transaction.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { PayoutModule } from './payout/payout.module';
+import { EventListenerModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -23,10 +25,12 @@ import { PayoutModule } from './payout/payout.module';
         JWT_SECRET: Joi.string().min(32).required(),
         RABBITMQ_URL: Joi.string().required(),
         RABBITMQ_EXCHANGE: Joi.string().default('lms.events'),
+        COURSE_SERVICE_URL: Joi.string().default('http://course-service:3003'),
       }),
       validationOptions: { allowUnknown: true, abortEarly: false },
     }),
 
+    HttpModule.register({ timeout: 5000 }),
     PrismaModule,
     MessagingModule,
     HealthModule,
@@ -35,6 +39,7 @@ import { PayoutModule } from './payout/payout.module';
     TransactionModule,
     RevenueModule,
     PayoutModule,
+    EventListenerModule,
   ],
 })
 export class AppModule {}

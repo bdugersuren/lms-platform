@@ -26,6 +26,30 @@ async function bootstrap(): Promise<void> {
     limits: { fileSize: 500 * 1024 * 1024, files: 1 }, // 500 MB
   });
 
+  // Hook: replace empty JSON body with '{}' so Fastify's strict JSON parser doesn't throw
+  // FST_ERR_CTP_EMPTY_JSON_BODY when clients POST with Content-Type: application/json and no body.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { Readable } = require('stream') as typeof import('stream');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fastify = app.getHttpAdapter().getInstance() as any;
+  fastify.addHook('preParsing', async (req: any, _reply: any, payload: any) => {
+    const ct: string = (req.headers['content-type'] ?? '') as string;
+    if (!ct.includes('application/json')) return payload;
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve, reject) => {
+      (payload as NodeJS.ReadableStream).on('data', (chunk: unknown) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string, 'utf8'));
+      });
+      (payload as NodeJS.ReadableStream).on('end', resolve);
+      (payload as NodeJS.ReadableStream).on('error', reject);
+    });
+    const raw = chunks.length ? Buffer.concat(chunks).toString('utf8').trim() : '';
+    const body = raw === '' ? '{}' : raw;
+    const buf = Buffer.from(body, 'utf8');
+    const stream = new Readable({ read() { this.push(buf); this.push(null); } });
+    return stream as unknown as typeof payload;
+  });
+
   app.enableCors({
     origin: (process.env.ALLOWED_ORIGINS ?? 'http://localhost:3000').split(','),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

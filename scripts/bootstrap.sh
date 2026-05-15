@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 # LMS Platform — Bootstrap Script
-# Installs all dependencies and generates Prisma clients.
+# Installs all dependencies and generates Prisma clients for every service.
+# Run this once after cloning the repo on a new machine.
 # =============================================================================
 set -euo pipefail
 
@@ -14,16 +15,24 @@ pnpm install
 echo "▶ Generating Prisma clients..."
 SERVICES=(
   "services/auth-service"
+  "services/course-service"
+  "services/enrollment-service"
+  "services/quiz-service"
+  "services/assignment-service"
+  "services/wallet-service"
+  "services/payment-service"
+  "services/ai-service"
+  "services/notification-service"
+  "services/media-service"
+  "services/certificate-service"
+  "services/analytics-service"
 )
 
 for SERVICE in "${SERVICES[@]}"; do
-  if [ -f "$SERVICE/prisma/schema.prisma" ]; then
-    echo "  → Generating Prisma client for $SERVICE"
-    (cd "$SERVICE" && pnpm exec prisma generate)
+  if [ -f "$ROOT_DIR/$SERVICE/prisma/schema.prisma" ]; then
+    echo "  → $SERVICE"
+    (cd "$ROOT_DIR/$SERVICE" && pnpm exec prisma generate)
   fi
 done
 
-echo "▶ Running database migrations..."
-bash "$ROOT_DIR/scripts/migrate.sh"
-
-echo "✓ Bootstrap complete."
+echo "✓ Bootstrap complete. Next: bash scripts/migrate.sh"

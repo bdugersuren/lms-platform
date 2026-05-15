@@ -119,4 +119,13 @@ export class WebhookService {
     await this.paymentService.completePayment(paymentId, `sim-${Date.now()}`);
     return { received: true };
   }
+
+  async mockPay(paymentId: string): Promise<{ received: boolean }> {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new Error('Payment not found');
+    if (payment.provider !== 'MOCK') throw new Error('Not a MOCK payment');
+    if (payment.status === 'COMPLETED') return { received: true };
+    await this.paymentService.completePayment(paymentId, `mock-${Date.now()}`);
+    return { received: true };
+  }
 }

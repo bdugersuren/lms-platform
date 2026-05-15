@@ -26,7 +26,7 @@ interface JwtUser { sub: string; email: string; role: string }
 @ApiTags('Payments')
 @ApiBearerAuth('access-token')
 @UseGuards(JwtAuthGuard)
-@Controller({ path: 'payments', version: '1' })
+@Controller('payments')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 

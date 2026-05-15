@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Every event from the RabbitMQ bus lands here as an immutable fact
+model AnalyticsEvent {
+  id         String   @id @default(uuid())
+  eventType  String   // e.g. "auth.user.registered", "payment.confirmed"
+  userId     String?
+  courseId   String?
+  payload    Json?    // raw event payload
+  occurredAt DateTime @default(now())
+
+  @@index([eventType])
+  @@index([userId])
+  @@index([courseId])
+  @@index([occurredAt])
+}
+
+// Daily KPI snapshot — computed by the service on demand or via cron
+model DailyKpi {
+  id                   String   @id @default(uuid())
+  date                 DateTime @db.Date
+  newUsers             Int      @default(0)
+  newEnrollments       Int      @default(0)
+  completedCourses     Int      @default(0)
+  confirmedPayments    Int      @default(0)
+  revenueAmount        Float    @default(0)
+  quizAttempts         Int      @default(0)
+  avgQuizScore         Float?
+  assignmentSubmissions Int     @default(0)
+  certificatesIssued   Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([date])
+  @@index([date])
+}

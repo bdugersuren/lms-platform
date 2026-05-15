@@ -10,6 +10,7 @@ import {
   useRevenueHistory,
   useMyPayouts,
   useRequestPayout,
+  useDevTopup,
 } from '@/hooks/use-wallet';
 import { clsx } from 'clsx';
 import type { TransactionType, PayoutStatus } from '@/types/wallet';
@@ -56,6 +57,21 @@ export default function WalletPage() {
   const { data: revHistory } = useRevenueHistory(revPage);
   const { data: payoutData } = useMyPayouts(payoutPage);
   const requestPayout = useRequestPayout();
+
+  const devTopup = useDevTopup();
+  const [devAmount, setDevAmount] = useState('');
+  const [devMsg, setDevMsg] = useState('');
+
+  const handleDevTopup = (amount: number) => {
+    setDevMsg('');
+    devTopup.mutate(
+      { amount, description: `Dev топ-ап +₮${amount.toLocaleString('mn-MN')}` },
+      {
+        onSuccess: (tx) => setDevMsg(`✓ ₮${Number(tx.amount).toLocaleString('mn-MN')} нэмэгдлээ`),
+        onError: (err) => setDevMsg(`✗ ${err.message}`),
+      },
+    );
+  };
 
   const [payoutForm, setPayoutForm] = useState({
     amount: '',
@@ -220,6 +236,59 @@ export default function WalletPage() {
                 requestPayout={requestPayout}
                 walletBalance={wallet.balance}
               />
+            )}
+
+            {/* Dev top-up panel — hidden in production */}
+            {process.env.NODE_ENV !== 'production' && (
+              <div className="border border-dashed border-amber-300 bg-amber-50 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🛠</span>
+                  <span className="text-sm font-semibold text-amber-800">Dev Tools — Хэтэвч цэнэглэх</span>
+                  <span className="ml-auto text-xs text-amber-500 bg-amber-100 px-2 py-0.5 rounded-full">DEVELOPMENT ONLY</span>
+                </div>
+
+                {/* Quick presets */}
+                <div className="flex flex-wrap gap-2">
+                  {[10_000, 50_000, 100_000, 500_000].map((amt) => (
+                    <button
+                      key={amt}
+                      onClick={() => handleDevTopup(amt)}
+                      disabled={devTopup.isPending}
+                      className="px-3 py-1.5 bg-white border border-amber-200 text-amber-800 rounded-lg text-xs font-semibold hover:bg-amber-100 transition-colors disabled:opacity-50"
+                    >
+                      +₮{amt.toLocaleString('mn-MN')}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom amount */}
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={devAmount}
+                    onChange={(e) => setDevAmount(e.target.value)}
+                    placeholder="Дурын дүн..."
+                    className="flex-1 px-3 py-2 rounded-lg border border-amber-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                  <button
+                    onClick={() => {
+                      const n = Number(devAmount);
+                      if (n > 0) { handleDevTopup(n); setDevAmount(''); }
+                    }}
+                    disabled={devTopup.isPending || !devAmount}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50"
+                  >
+                    {devTopup.isPending ? '...' : 'Нэмэх'}
+                  </button>
+                </div>
+
+                {devMsg && (
+                  <p className={clsx('text-xs font-medium', devMsg.startsWith('✓') ? 'text-green-700' : 'text-red-600')}>
+                    {devMsg}
+                  </p>
+                )}
+              </div>
             )}
           </>
         )}

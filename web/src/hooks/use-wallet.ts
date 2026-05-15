@@ -91,3 +91,16 @@ export function useRequestPayout() {
     },
   });
 }
+
+export function useDevTopup() {
+  const qc = useQueryClient();
+  return useMutation<Transaction, Error, { amount: number; description?: string }>({
+    mutationFn: async (dto) => {
+      const { data } = await api.post<ApiSuccess<Transaction>>('/wallet/dev/topup', dto);
+      return data.data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['wallet'] });
+    },
+  });
+}

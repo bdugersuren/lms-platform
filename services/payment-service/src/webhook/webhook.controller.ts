@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  NotFoundException,
   Param,
   Post,
   UseGuards,
@@ -11,7 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WebhookService } from './webhook.service';
 
 @ApiTags('Webhooks')
-@Controller({ path: 'webhooks', version: '1' })
+@Controller('webhooks')
 export class WebhookController {
   constructor(private readonly webhookService: WebhookService) {}
 
@@ -41,5 +43,19 @@ export class WebhookController {
   async simulate(@Param('paymentId') paymentId: string) {
     const data = await this.webhookService.simulateComplete(paymentId);
     return ApiResponseBuilder.success(data, 'Payment simulated as completed');
+  }
+
+  @Post('mock-pay/:paymentId')
+  @ApiOperation({ summary: '[DEV] Instantly complete a MOCK provider payment' })
+  @ApiParam({ name: 'paymentId', type: 'string' })
+  async mockPay(@Param('paymentId') paymentId: string) {
+    try {
+      const data = await this.webhookService.mockPay(paymentId);
+      return ApiResponseBuilder.success(data, 'Mock payment completed');
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === 'Payment not found') throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
   }
 }

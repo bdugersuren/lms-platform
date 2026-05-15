@@ -21,15 +21,8 @@ export class EnrollmentService {
     private readonly courseClient: CourseClientService,
   ) {}
 
-  async enroll(studentId: string, dto: CreateEnrollmentDto) {
-    const existing = await this.prisma.enrollment.findUnique({
-      where: { courseId_studentId: { courseId: dto.courseId, studentId } },
-    });
-    if (existing) throw new ConflictException('Already enrolled in this course');
-
-    const course = await this.courseClient.getCourse(dto.courseId);
-
-    const lessonProgressData = course.modules
+  private buildLessonProgressData(course: Awaited<ReturnType<CourseClientService['getCourse']>>) {
+    const data = course.modules
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .flatMap((mod) =>
         mod.lessons
@@ -42,11 +35,20 @@ export class EnrollmentService {
                 : ProgressStatus.LOCKED,
           })),
       );
-
-    // First lesson always unlocked regardless of module sortOrder for sequential courses
-    if (course.isSequential && lessonProgressData.length > 0) {
-      lessonProgressData[0].status = ProgressStatus.IN_PROGRESS;
+    if (course.isSequential && data.length > 0) {
+      data[0].status = ProgressStatus.IN_PROGRESS;
     }
+    return data;
+  }
+
+  async enroll(studentId: string, dto: CreateEnrollmentDto) {
+    const existing = await this.prisma.enrollment.findUnique({
+      where: { courseId_studentId: { courseId: dto.courseId, studentId } },
+    });
+    if (existing) throw new ConflictException('Already enrolled in this course');
+
+    const course = await this.courseClient.getCourse(dto.courseId);
+    const lessonProgressData = this.buildLessonProgressData(course);
 
     const enrollment = await this.prisma.enrollment.create({
       data: {
@@ -57,7 +59,7 @@ export class EnrollmentService {
       include: { lessonProgresses: true },
     });
 
-    this.messaging.publishEvent('course.student.enrolled', {
+    this.messaging.publishEvent('enrollment.created', {
       enrollmentId: enrollment.id,
       courseId: dto.courseId,
       studentId,
@@ -65,6 +67,48 @@ export class EnrollmentService {
 
     this.logger.log(`Student ${studentId} enrolled in course ${dto.courseId}`);
     return enrollment;
+  }
+
+  async enrollFromPayment(studentId: string, courseId: string, paymentId: string): Promise<void> {
+    // Idempotency: same paymentId never creates a second enrollment
+    const byPayment = await this.prisma.enrollment.findFirst({ where: { paymentId } });
+    if (byPayment) {
+      this.logger.warn(`Enrollment already exists for paymentId=${paymentId}, skipping`);
+      return;
+    }
+
+    // Guard: already enrolled via other means — link the paymentId and return
+    const existing = await this.prisma.enrollment.findUnique({
+      where: { courseId_studentId: { courseId, studentId } },
+    });
+    if (existing) {
+      if (!existing.paymentId) {
+        await this.prisma.enrollment.update({ where: { id: existing.id }, data: { paymentId } });
+      }
+      this.logger.warn(`Student ${studentId} already enrolled in ${courseId}, linked paymentId`);
+      return;
+    }
+
+    const course = await this.courseClient.getCourse(courseId);
+    const lessonProgressData = this.buildLessonProgressData(course);
+
+    const enrollment = await this.prisma.enrollment.create({
+      data: {
+        courseId,
+        studentId,
+        paymentId,
+        lessonProgresses: { create: lessonProgressData },
+      },
+      include: { lessonProgresses: true },
+    });
+
+    this.messaging.publishEvent('enrollment.created', {
+      enrollmentId: enrollment.id,
+      courseId,
+      studentId,
+    });
+
+    this.logger.log(`Auto-enrolled student ${studentId} in course ${courseId} via payment ${paymentId}`);
   }
 
   async unenroll(enrollmentId: string, studentId: string) {

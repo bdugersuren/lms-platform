@@ -1,9 +1,9 @@
 {
   "pages": {
-    "/page": [
+    "/notifications/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
+      "static/chunks/app/notifications/page.js"
     ],
     "/layout": [
       "static/chunks/webpack.js",
@@ -11,25 +11,25 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/(auth)/login/page": [
+    "/media/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(auth)/login/page.js"
+      "static/chunks/app/media/page.js"
     ],
-    "/(auth)/register/page": [
+    "/certificates/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(auth)/register/page.js"
+      "static/chunks/app/certificates/page.js"
     ],
-    "/dashboard/page": [
+    "/certificates/verify/[code]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/page.js"
+      "static/chunks/app/certificates/verify/[code]/page.js"
     ],
-    "/_not-found/page": [
+    "/analytics/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/_not-found/page.js"
+      "static/chunks/app/analytics/page.js"
     ]
   }
 }

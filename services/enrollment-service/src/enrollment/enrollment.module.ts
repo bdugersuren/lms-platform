@@ -7,5 +7,6 @@ import { ProgressService } from './progress.service';
 @Module({
   controllers: [EnrollmentController, ProgressController],
   providers: [EnrollmentService, ProgressService],
+  exports: [EnrollmentService],
 })
 export class EnrollmentModule {}

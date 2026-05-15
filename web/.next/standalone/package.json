@@ -1,0 +1,36 @@
+{
+  "name": "lms-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Enterprise-grade AI-native Learning Management System — monorepo root",
+  "scripts": {
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down -v",
+    "docker:logs": "docker compose logs -f",
+    "bootstrap": "bash scripts/bootstrap.sh",
+    "migrate": "bash scripts/migrate.sh",
+    "seed": "bash scripts/seed.sh",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "format": "prettier --write \"**/*.{ts,json,md}\" --ignore-path .gitignore",
+    "test": "pnpm -r run test",
+    "test:e2e": "pnpm -r run test:e2e"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "prettier": "^3.3.2",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.4.0"
+}

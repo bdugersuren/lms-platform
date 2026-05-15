@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
 import { QPayService } from '../qpay/qpay.service';
 import { SocialPayService } from '../socialpay/socialpay.service';
+import { MockPaymentService } from '../mock/mock-payment.service';
 import { CreatePaymentDto, PaymentProviderDto } from './dto/create-payment.dto';
 import { QueryPaymentDto } from './dto/query-payment.dto';
 
@@ -21,6 +22,7 @@ export class PaymentService {
     private readonly messaging: MessagingService,
     private readonly qpay: QPayService,
     private readonly socialPay: SocialPayService,
+    private readonly mockPayment: MockPaymentService,
   ) {}
 
   async create(userId: string, dto: CreatePaymentDto) {
@@ -39,6 +41,18 @@ export class PaymentService {
     });
 
     try {
+      if (dto.provider === PaymentProviderDto.MOCK) {
+        const invoice = this.mockPayment.createInvoice(payment.id);
+        return this.prisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            invoiceId: invoice.invoiceId,
+            expiredAt: invoice.expiredAt,
+            status: 'PROCESSING',
+          },
+        });
+      }
+
       if (dto.provider === PaymentProviderDto.QPAY) {
         const invoice = await this.qpay.createInvoice({
           invoiceCode: 'LMS_PAYMENT',
@@ -59,25 +73,25 @@ export class PaymentService {
             status: 'PROCESSING',
           },
         });
-      } else {
-        // SOCIAL_PAY
-        const invoice = await this.socialPay.createInvoice({
-          invoiceId: payment.id,
-          amount: dto.amount,
-          description,
-          returnUrl: dto.returnUrl ?? 'http://localhost/payment/result',
-        });
-
-        return this.prisma.payment.update({
-          where: { id: payment.id },
-          data: {
-            invoiceId: invoice.invoiceId,
-            checkoutUrl: invoice.checkoutUrl,
-            expiredAt: invoice.expiredAt,
-            status: 'PROCESSING',
-          },
-        });
       }
+
+      // SOCIAL_PAY
+      const invoice = await this.socialPay.createInvoice({
+        invoiceId: payment.id,
+        amount: dto.amount,
+        description,
+        returnUrl: dto.returnUrl ?? 'http://localhost/payment/result',
+      });
+
+      return this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          invoiceId: invoice.invoiceId,
+          checkoutUrl: invoice.checkoutUrl,
+          expiredAt: invoice.expiredAt,
+          status: 'PROCESSING',
+        },
+      });
     } catch (err) {
       await this.prisma.payment.update({
         where: { id: payment.id },
@@ -120,6 +134,8 @@ export class PaymentService {
     const payment = await this.findById(paymentId);
 
     if (payment.status === 'COMPLETED') return payment;
+    // MOCK payments are only completed via POST /webhooks/mock-pay/:id
+    if (payment.provider === 'MOCK') return payment;
     if (!payment.invoiceId) throw new BadRequestException('No invoice found for this payment');
 
     let paid = false;
@@ -152,7 +168,7 @@ export class PaymentService {
       },
     });
 
-    this.messaging.publishEvent('payment.completed', {
+    this.messaging.publishEvent('payment.confirmed', {
       paymentId: payment.id,
       userId: payment.userId,
       courseId: payment.courseId,
