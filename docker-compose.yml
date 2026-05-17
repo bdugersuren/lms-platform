@@ -1,66 +1,166 @@
 # =============================================================================
 # LMS Platform — Docker Compose
-# All services share the lms-net network.
-# Infrastructure services must be healthy before app services start.
+# Optimized for WSL2 + Docker Desktop
+#
+# ── Profile overview (start progressively, not all at once) ──────────────────
+#
+#   (none)     Infra only — postgres, redis, rabbitmq, minio       = 1.2 GB
+#   core       + nginx, gateway, auth, course, enrollment          + 0.8 GB  → 2.0 GB
+#   learn      + quiz, assignment                                  + 0.4 GB  → 2.4 GB
+#   finance    + wallet, payment                                   + 0.4 GB  → 2.8 GB
+#   ops        + notification, media, certificate, analytics       + 0.9 GB  → 3.7 GB
+#   frontend   + web  (requires core for nginx)                   + 0.3 GB  → 4.0 GB
+#   ai         + ollama, ai-service  (requires core)              + 4.5 GB  → 8.5 GB
+#
+# ── Quick start ──────────────────────────────────────────────────────────────
+#
+#   Infra only:      docker compose up -d
+#   Core backend:    docker compose --profile core up -d
+#   Full backend:    docker compose --profile core --profile learn \
+#                      --profile finance --profile ops up -d
+#   Full stack:      docker compose --profile core --profile learn \
+#                      --profile finance --profile ops --profile frontend up -d
+#   + AI:            append --profile ai to any of the above
+#
+# ── Tips ─────────────────────────────────────────────────────────────────────
+#
+#   Rebuild one service:  docker compose build --no-cache auth-service
+#   Tail logs:            docker compose logs -f gateway auth-service
+#   Resource usage:       docker stats --no-stream
 # =============================================================================
 
+# ── YAML Anchors ─────────────────────────────────────────────────────────────
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-networks: &networks
+  networks:
+    - lms-net
+
+x-nestjs-build: &nestjs-build
+  context: .
+  target: runner
+
+# Health check timing for NestJS services (Prisma + NestJS boot takes ~10-20s)
+x-nestjs-healthcheck: &nestjs-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+
+# Standard 192 MB cap — NestJS prod build + Prisma client fits comfortably
+x-nestjs-resources: &nestjs-resources
+  deploy:
+    resources:
+      limits:
+        memory: 192M
+
+# Base for media/certificate — 320 MB for file I/O buffering
+x-heavy-common: &heavy-common
+  restart: unless-stopped
+  networks:
+    - lms-net
+  env_file: .env
+  deploy:
+    resources:
+      limits:
+        memory: 320M
+
+# Every NestJS service waits for the three core infra components
+x-infra-depends: &infra-depends
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  rabbitmq:
+    condition: service_healthy
+
+# Base configuration shared by every NestJS service
+x-nestjs-common: &nestjs-common
+  <<: [*restart, *networks, *nestjs-resources]
+  env_file: .env
+
+# Common environment injected into every NestJS service.
+# --max-old-space-size aligns with the 192 MB container limit.
+x-nestjs-env: &nestjs-env
+  NODE_OPTIONS: --max-old-space-size=150
+  NODE_ENV: ${NODE_ENV:-development}
+
+# ── Networks ─────────────────────────────────────────────────────────────────
 networks:
   lms-net:
     driver: bridge
+    # Disable ICC (inter-container communication) for services that don't need it.
+    # All legitimate traffic flows through declared depends_on links.
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
 
-volumes:
-  postgres_data:
-  redis_data:
-  rabbitmq_data:
-  minio_data:
-  ollama_data:
-
+# ── Services ──────────────────────────────────────────────────────────────────
 services:
 
-  # ---------------------------------------------------------------------------
-  # PostgreSQL — single instance, all service databases created via init.sql
-  # ---------------------------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
+  # INFRASTRUCTURE  (default — always starts, no profile required)
+  # ────────────────────────────────────────────────────────────────────────────
+
   postgres:
     image: postgres:16-alpine
     container_name: lms-postgres
-    restart: unless-stopped
+    <<: [*restart, *networks]
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER: ${POSTGRES_USER:-lms}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: postgres
+      # Tune shared_buffers to 25% of container limit (384 M × 0.25 = ~96 MB).
+      # POSTGRES_INITDB_ARGS passes args only on first init.
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./VOLUMES/postgres/data:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "5432:5432"
-    networks:
-      - lms-net
+      - "127.0.0.1:5432:5432"
+    shm_size: "256mb"
+    command: >
+      postgres
+        -c shared_buffers=96MB
+        -c effective_cache_size=256MB
+        -c work_mem=4MB
+        -c maintenance_work_mem=32MB
+        -c max_connections=200
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=16MB
+        -c log_min_duration_statement=500
+    deploy:
+      resources:
+        limits:
+          memory: 384M
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lms} -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
 
-  # ---------------------------------------------------------------------------
-  # Redis — token blacklist, rate limiting
-  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: lms-redis
-    restart: unless-stopped
+    <<: [*restart, *networks]
     command: >
       redis-server
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --save 60 1
-      --loglevel warning
+        --maxmemory 200mb
+        --maxmemory-policy allkeys-lru
+        --save ""
+        --appendonly no
+        --loglevel warning
+        --tcp-backlog 128
     volumes:
-      - redis_data:/data
+      - ./VOLUMES/redis/data:/data
     ports:
-      - "6379:6379"
-    networks:
-      - lms-net
+      - "127.0.0.1:6379:6379"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -68,26 +168,26 @@ services:
       retries: 5
       start_period: 10s
 
-  # ---------------------------------------------------------------------------
-  # RabbitMQ — async event bus
-  # ---------------------------------------------------------------------------
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: lms-rabbitmq
-    restart: unless-stopped
+    <<: [*restart, *networks]
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-lms}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
-      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit log_levels [{connection,error},{default,error}]"
+      RABBITMQ_DEFAULT_VHOST: /
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-lms_dev_cookie}
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - ./VOLUMES/rabbitmq/data:/var/lib/rabbitmq
       - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
       - ./infra/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     ports:
-      - "5672:5672"
-      - "15672:15672"
-    networks:
-      - lms-net
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 15s
@@ -95,97 +195,70 @@ services:
       retries: 5
       start_period: 30s
 
-  # ---------------------------------------------------------------------------
-  # MinIO — object storage (media files)
-  # ---------------------------------------------------------------------------
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2024-07-04T14-25-45Z
     container_name: lms-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
+    <<: [*restart, *networks]
+    command: server /data --console-address ":9001" --quiet
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
-      - minio_data:/data
+      - ./VOLUMES/minio/data:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
-    networks:
-      - lms-net
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    deploy:
+      resources:
+        limits:
+          memory: 192M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 20s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 20s
 
-  # ---------------------------------------------------------------------------
-  # Web — Next.js frontend (served through nginx on port 80)
-  # ---------------------------------------------------------------------------
-  web:
-    build:
-      context: .
-      dockerfile: web/Dockerfile
-      target: runner
-      args:
-        NEXT_PUBLIC_API_URL: /api
-    container_name: lms-web
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      PORT: 3002
-      HOSTNAME: 0.0.0.0
-    networks:
-      - lms-net
-    depends_on:
-      gateway:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/ || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+  # ────────────────────────────────────────────────────────────────────────────
+  # CORE  profile: core
+  # Gateway + primary domain services. Minimum for a working API.
+  # ────────────────────────────────────────────────────────────────────────────
 
-  # ---------------------------------------------------------------------------
-  # NGINX — reverse proxy: / → web, /api → gateway
-  # ---------------------------------------------------------------------------
   nginx:
-    image: nginx:1.25-alpine
+    image: nginx:1.27-alpine
     container_name: lms-nginx
-    restart: unless-stopped
+    <<: [*restart, *networks]
+    profiles: [core]
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "80:80"
-    networks:
-      - lms-net
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     depends_on:
       gateway:
-        condition: service_started
-      web:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
-  # ---------------------------------------------------------------------------
-  # Gateway — API gateway (NestJS + Fastify)
-  # ---------------------------------------------------------------------------
   gateway:
     build:
-      context: .
+      <<: *nestjs-build
       dockerfile: gateway/Dockerfile
-      target: runner
     container_name: lms-gateway
-    restart: unless-stopped
-    env_file:
-      - .env
+    <<: *nestjs-common
+    profiles: [core]
     environment:
+      <<: *nestjs-env
       PORT: ${GATEWAY_PORT:-3000}
-      NODE_ENV: ${GATEWAY_NODE_ENV:-development}
     ports:
       - "3000:3000"
-    networks:
-      - lms-net
     depends_on:
       redis:
         condition: service_healthy
@@ -198,57 +271,193 @@ services:
       retries: 3
       start_period: 30s
 
-  # ---------------------------------------------------------------------------
-  # Course Service — courses, modules, lessons
-  # ---------------------------------------------------------------------------
+  auth-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/auth-service/Dockerfile
+    container_name: lms-auth-service
+    <<: *nestjs-common
+    profiles: [core]
+    environment:
+      <<: *nestjs-env
+      PORT: ${AUTH_PORT:-3001}
+      DATABASE_URL: ${AUTH_DATABASE_URL}
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      <<: *infra-depends
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/api/health"]
+      <<: *nestjs-healthcheck
+
   course-service:
     build:
-      context: .
+      <<: *nestjs-build
       dockerfile: services/course-service/Dockerfile
-      target: runner
     container_name: lms-course-service
-    restart: unless-stopped
-    env_file:
-      - .env
+    <<: *nestjs-common
+    profiles: [core]
     environment:
+      <<: *nestjs-env
       PORT: ${COURSE_PORT:-3003}
-      NODE_ENV: ${COURSE_NODE_ENV:-development}
       DATABASE_URL: ${COURSE_DATABASE_URL}
     ports:
-      - "3003:3003"
-    networks:
-      - lms-net
+      - "127.0.0.1:3003:3003"
     depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      <<: *infra-depends
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3003/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      <<: *nestjs-healthcheck
 
-  # ---------------------------------------------------------------------------
-  # Media Service — video uploads, transcoding, subtitles, MinIO management
-  # ---------------------------------------------------------------------------
+  enrollment-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/enrollment-service/Dockerfile
+    container_name: lms-enrollment-service
+    <<: *nestjs-common
+    profiles: [core]
+    environment:
+      <<: *nestjs-env
+      PORT: ${ENROLLMENT_PORT:-3004}
+      DATABASE_URL: ${ENROLLMENT_DATABASE_URL}
+      COURSE_SERVICE_URL: http://course-service:${COURSE_PORT:-3003}
+    ports:
+      - "127.0.0.1:3004:3004"
+    depends_on:
+      <<: *infra-depends
+      course-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3004/api/health"]
+      <<: *nestjs-healthcheck
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # LEARNING  profile: learn
+  # Assessment engine. Start after core.
+  # ────────────────────────────────────────────────────────────────────────────
+
+  quiz-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/quiz-service/Dockerfile
+    container_name: lms-quiz-service
+    <<: *nestjs-common
+    profiles: [learn]
+    environment:
+      <<: *nestjs-env
+      PORT: ${QUIZ_PORT:-3005}
+      DATABASE_URL: ${QUIZ_DATABASE_URL}
+    ports:
+      - "127.0.0.1:3005:3005"
+    depends_on:
+      <<: *infra-depends
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3005/api/health"]
+      <<: *nestjs-healthcheck
+
+  assignment-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/assignment-service/Dockerfile
+    container_name: lms-assignment-service
+    <<: *nestjs-common
+    profiles: [learn]
+    environment:
+      <<: *nestjs-env
+      PORT: ${ASSIGNMENT_PORT:-3006}
+      DATABASE_URL: ${ASSIGNMENT_DATABASE_URL}
+    ports:
+      - "127.0.0.1:3006:3006"
+    depends_on:
+      <<: *infra-depends
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3006/api/health"]
+      <<: *nestjs-healthcheck
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # FINANCE  profile: finance
+  # Financial logic is isolated per CLAUDE.md.
+  # ────────────────────────────────────────────────────────────────────────────
+
+  wallet-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/wallet-service/Dockerfile
+    container_name: lms-wallet-service
+    <<: *nestjs-common
+    profiles: [finance]
+    environment:
+      <<: *nestjs-env
+      PORT: ${WALLET_PORT:-3007}
+      DATABASE_URL: ${WALLET_DATABASE_URL}
+    ports:
+      - "127.0.0.1:3007:3007"
+    depends_on:
+      <<: *infra-depends
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3007/api/health"]
+      <<: *nestjs-healthcheck
+
+  payment-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/payment-service/Dockerfile
+    container_name: lms-payment-service
+    <<: *nestjs-common
+    profiles: [finance]
+    environment:
+      <<: *nestjs-env
+      PORT: ${PAYMENT_PORT:-3008}
+      DATABASE_URL: ${PAYMENT_DATABASE_URL}
+    ports:
+      - "127.0.0.1:3008:3008"
+    depends_on:
+      <<: *infra-depends
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3008/api/health"]
+      <<: *nestjs-healthcheck
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # OPS  profile: ops
+  # Supporting services: notifications, media, certificates, analytics.
+  # ────────────────────────────────────────────────────────────────────────────
+
+  notification-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/notification-service/Dockerfile
+    container_name: lms-notification-service
+    <<: *nestjs-common
+    profiles: [ops]
+    environment:
+      <<: *nestjs-env
+      PORT: ${NOTIFICATION_PORT:-3010}
+      DATABASE_URL: ${NOTIFICATION_DATABASE_URL}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@lms.local}
+    ports:
+      - "127.0.0.1:3010:3010"
+    depends_on:
+      <<: *infra-depends
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3010/api/health"]
+      <<: *nestjs-healthcheck
+
   media-service:
     build:
-      context: .
+      <<: *nestjs-build
       dockerfile: services/media-service/Dockerfile
-      target: runner
     container_name: lms-media-service
-    restart: unless-stopped
-    env_file:
-      - .env
+    <<: *heavy-common
+    profiles: [ops]
     environment:
+      <<: *nestjs-env
       PORT: ${MEDIA_PORT:-3011}
-      NODE_ENV: ${MEDIA_NODE_ENV:-development}
       DATABASE_URL: ${MEDIA_DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      RABBITMQ_URL: ${RABBITMQ_URL}
-      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
       MINIO_PORT: ${MINIO_PORT:-9000}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
@@ -259,401 +468,146 @@ services:
       UPLOAD_MAX_SIZE_MB: ${UPLOAD_MAX_SIZE_MB:-500}
       PRESIGN_EXPIRES_SECONDS: ${PRESIGN_EXPIRES_SECONDS:-7200}
     ports:
-      - "3011:3011"
-    networks:
-      - lms-net
+      - "127.0.0.1:3011:3011"
     depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      <<: *infra-depends
       minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3011/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      <<: *nestjs-healthcheck
 
-  # ---------------------------------------------------------------------------
-  # Notification Service — email, SMS, push, in-app notifications
-  # ---------------------------------------------------------------------------
-  notification-service:
-    build:
-      context: .
-      dockerfile: services/notification-service/Dockerfile
-      target: runner
-    container_name: lms-notification-service
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      PORT: ${NOTIFICATION_PORT:-3010}
-      NODE_ENV: ${NOTIFICATION_NODE_ENV:-development}
-      DATABASE_URL: ${NOTIFICATION_DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      RABBITMQ_URL: ${RABBITMQ_URL}
-      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASS: ${SMTP_PASS:-}
-      SMTP_FROM: ${SMTP_FROM:-"LMS Platform <noreply@lms.example.com>"}
-    ports:
-      - "3010:3010"
-    networks:
-      - lms-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3010/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # ---------------------------------------------------------------------------
-  # Ollama — local LLM inference engine
-  # ---------------------------------------------------------------------------
-  ollama:
-    image: ollama/ollama:latest
-    container_name: lms-ollama
-    restart: unless-stopped
-    volumes:
-      - ollama_data:/root/.ollama
-    ports:
-      - "11434:11434"
-    networks:
-      - lms-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
-  # ---------------------------------------------------------------------------
-  # Certificate Service — generation, QR verification, public validation
-  # ---------------------------------------------------------------------------
   certificate-service:
     build:
-      context: .
+      <<: *nestjs-build
       dockerfile: services/certificate-service/Dockerfile
-      target: runner
     container_name: lms-certificate-service
-    restart: unless-stopped
-    env_file:
-      - .env
+    <<: *nestjs-common
+    profiles: [ops]
     environment:
+      <<: *nestjs-env
       PORT: ${CERTIFICATE_PORT:-3012}
-      NODE_ENV: ${CERTIFICATE_NODE_ENV:-development}
       DATABASE_URL: ${CERTIFICATE_DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      RABBITMQ_URL: ${RABBITMQ_URL}
-      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
       MINIO_PORT: ${MINIO_PORT:-9000}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-      MINIO_BUCKET: ${MINIO_BUCKET:-lms-media}
+      MINIO_BUCKET: ${CERTIFICATE_BUCKET:-lms-certificates}
       MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
-      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3002}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost}
     ports:
-      - "3012:3012"
-    networks:
-      - lms-net
+      - "127.0.0.1:3012:3012"
     depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      <<: *infra-depends
       minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3012/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      <<: *nestjs-healthcheck
 
-  # ---------------------------------------------------------------------------
-  # Analytics Service — KPI, reports, AI analytics, dashboards
-  # ---------------------------------------------------------------------------
   analytics-service:
     build:
-      context: .
+      <<: *nestjs-build
       dockerfile: services/analytics-service/Dockerfile
-      target: runner
     container_name: lms-analytics-service
-    restart: unless-stopped
-    env_file:
-      - .env
+    <<: *nestjs-common
+    profiles: [ops]
     environment:
+      <<: *nestjs-env
       PORT: ${ANALYTICS_PORT:-3013}
-      NODE_ENV: ${ANALYTICS_NODE_ENV:-development}
       DATABASE_URL: ${ANALYTICS_DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      RABBITMQ_URL: ${RABBITMQ_URL}
-      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
     ports:
-      - "3013:3013"
-    networks:
-      - lms-net
+      - "127.0.0.1:3013:3013"
     depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      <<: *infra-depends
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3013/api/health"]
+      <<: *nestjs-healthcheck
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # FRONTEND  profile: frontend  (requires core for nginx)
+  # Next.js app — served through nginx reverse proxy.
+  # ────────────────────────────────────────────────────────────────────────────
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      target: runner
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    container_name: lms-web
+    <<: [*restart, *networks]
+    profiles: [frontend]
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      HOSTNAME: 0.0.0.0
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 30s
 
-  # ---------------------------------------------------------------------------
-  # AI Service — AI tutor, essay scoring, recommendations, skill graph
-  # ---------------------------------------------------------------------------
+  # ────────────────────────────────────────────────────────────────────────────
+  # AI  profile: ai  (requires core for RabbitMQ / postgres)
+  # All LLM inference routes through Ollama. Never call external APIs.
+  # ────────────────────────────────────────────────────────────────────────────
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: lms-ollama
+    <<: [*restart, *networks]
+    profiles: [ai]
+    volumes:
+      - ./VOLUMES/ollama/data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:11434/api/tags"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+
   ai-service:
     build:
-      context: .
+      <<: *nestjs-build
       dockerfile: services/ai-service/Dockerfile
-      target: runner
     container_name: lms-ai-service
-    restart: unless-stopped
-    env_file:
-      - .env
+    <<: [*restart, *networks]
+    profiles: [ai]
+    env_file: .env
     environment:
+      <<: *nestjs-env
       PORT: ${AI_PORT:-3009}
-      NODE_ENV: ${AI_NODE_ENV:-development}
       DATABASE_URL: ${AI_DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      RABBITMQ_URL: ${RABBITMQ_URL}
-      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
       OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-120000}
     ports:
-      - "3009:3009"
-    networks:
-      - lms-net
+      - "127.0.0.1:3009:3009"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
     depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      <<: *infra-depends
       ollama:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3009/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # ---------------------------------------------------------------------------
-  # Enrollment Service — enrollments & progress tracking
-  # ---------------------------------------------------------------------------
-  enrollment-service:
-    build:
-      context: .
-      dockerfile: services/enrollment-service/Dockerfile
-      target: runner
-    container_name: lms-enrollment-service
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      PORT: ${ENROLLMENT_PORT:-3004}
-      NODE_ENV: ${ENROLLMENT_NODE_ENV:-development}
-      DATABASE_URL: ${ENROLLMENT_DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      COURSE_SERVICE_URL: http://course-service:3003
-      RABBITMQ_URL: ${RABBITMQ_URL}
-      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-lms.events}
-    ports:
-      - "3004:3004"
-    networks:
-      - lms-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      course-service:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3004/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # ---------------------------------------------------------------------------
-  # Wallet Service — wallet, transactions, revenue sharing, payouts
-  # IMPORTANT: Financial logic MUST be isolated.
-  # ---------------------------------------------------------------------------
-  wallet-service:
-    build:
-      context: .
-      dockerfile: services/wallet-service/Dockerfile
-      target: runner
-    container_name: lms-wallet-service
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      PORT: ${WALLET_PORT:-3007}
-      NODE_ENV: ${WALLET_NODE_ENV:-development}
-      DATABASE_URL: ${WALLET_DATABASE_URL}
-    ports:
-      - "3007:3007"
-    networks:
-      - lms-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3007/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # ---------------------------------------------------------------------------
-  # Payment Service — QPay, SocialPay, payment verification, webhook handling
-  # ---------------------------------------------------------------------------
-  payment-service:
-    build:
-      context: .
-      dockerfile: services/payment-service/Dockerfile
-      target: runner
-    container_name: lms-payment-service
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      PORT: ${PAYMENT_PORT:-3008}
-      NODE_ENV: ${PAYMENT_NODE_ENV:-development}
-      DATABASE_URL: ${PAYMENT_DATABASE_URL}
-    ports:
-      - "3008:3008"
-    networks:
-      - lms-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3008/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # ---------------------------------------------------------------------------
-  # Assignment Service — assignments, grading, submissions
-  # ---------------------------------------------------------------------------
-  assignment-service:
-    build:
-      context: .
-      dockerfile: services/assignment-service/Dockerfile
-      target: runner
-    container_name: lms-assignment-service
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      PORT: ${ASSIGNMENT_PORT:-3006}
-      NODE_ENV: ${ASSIGNMENT_NODE_ENV:-development}
-      DATABASE_URL: ${ASSIGNMENT_DATABASE_URL}
-    ports:
-      - "3006:3006"
-    networks:
-      - lms-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3006/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # ---------------------------------------------------------------------------
-  # Quiz Service — quizzes, adaptive exams, question bank, submissions
-  # ---------------------------------------------------------------------------
-  quiz-service:
-    build:
-      context: .
-      dockerfile: services/quiz-service/Dockerfile
-      target: runner
-    container_name: lms-quiz-service
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      PORT: ${QUIZ_PORT:-3005}
-      NODE_ENV: ${QUIZ_NODE_ENV:-development}
-      DATABASE_URL: ${QUIZ_DATABASE_URL}
-    ports:
-      - "3005:3005"
-    networks:
-      - lms-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3005/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # ---------------------------------------------------------------------------
-  # Auth Service — authentication & authorization
-  # ---------------------------------------------------------------------------
-  auth-service:
-    build:
-      context: .
-      dockerfile: services/auth-service/Dockerfile
-      target: runner
-    container_name: lms-auth-service
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      PORT: ${AUTH_PORT:-3001}
-      NODE_ENV: ${AUTH_NODE_ENV:-development}
-      DATABASE_URL: ${AUTH_DATABASE_URL}
-    ports:
-      - "3001:3001"
-    networks:
-      - lms-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      <<: *nestjs-healthcheck

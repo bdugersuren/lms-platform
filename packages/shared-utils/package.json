@@ -5,6 +5,13 @@
   "description": "Shared utilities: logger, crypto, pagination, response builder",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -12,14 +19,14 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "winston": "^3.13.0",
-    "winston-daily-rotate-file": "^5.0.0",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "catalog:",
+    "winston": "catalog:",
+    "winston-daily-rotate-file": "catalog:"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20.14.0",
-    "typescript": "^5.4.5"
+    "@types/bcryptjs": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "@lms/shared-types": "workspace:*"

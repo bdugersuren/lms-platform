@@ -1,0 +1,206 @@
+# docker-compose.override.yml — Development hot-reload overlay
+#
+# Docker Compose automatically merges this with docker-compose.yml.
+# To run production images instead, rename or delete this file.
+#
+# Strategy:
+#   • Services build to 'svc-build' stage (source + workspace node_modules + shared pkgs compiled)
+#   • service src/ is bind-mounted so edits are reflected without rebuilding
+#   • packages/ is bind-mounted so shared-package edits trigger reloads too
+#   • nodemon + ts-node --transpile-only gives ~3 s restarts (no type-check pass)
+#   • Memory raised to 512 M (vs 192 M prod) to give ts-node compilation headroom
+#
+# Recommended local workflow (minimal RAM):
+#   pnpm docker:infra            # postgres, redis, rabbitmq, minio (~1.2 GB)
+#   pnpm dev:auth                # run auth-service locally with nodemon
+#   pnpm dev:gateway             # run gateway locally with nodemon
+#
+# Full containerised hot-reload workflow:
+#   docker compose --profile core up -d   # merges this file automatically
+# ---------------------------------------------------------------------------
+
+# ── Extension fields ─────────────────────────────────────────────────────────
+
+x-dev-env: &dev-env
+  NODE_ENV: development
+  NODE_OPTIONS: --max-old-space-size=384
+  TS_NODE_TRANSPILE_ONLY: "true"
+
+x-dev-deploy: &dev-deploy
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+
+# ── Services ─────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── core profile ────────────────────────────────────────────────────────────
+
+  gateway:
+    build:
+      target: svc-build
+    working_dir: /app/gateway
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./gateway/src:/app/gateway/src:delegated
+      - ./packages:/app/packages:delegated
+
+  auth-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/auth-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/auth-service/src:/app/services/auth-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  course-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/course-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/course-service/src:/app/services/course-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  enrollment-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/enrollment-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/enrollment-service/src:/app/services/enrollment-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  # ── learn profile ────────────────────────────────────────────────────────────
+
+  quiz-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/quiz-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/quiz-service/src:/app/services/quiz-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  assignment-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/assignment-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/assignment-service/src:/app/services/assignment-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  # ── finance profile ──────────────────────────────────────────────────────────
+
+  wallet-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/wallet-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/wallet-service/src:/app/services/wallet-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  payment-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/payment-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/payment-service/src:/app/services/payment-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  # ── ops profile ──────────────────────────────────────────────────────────────
+
+  notification-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/notification-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/notification-service/src:/app/services/notification-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  media-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/media-service
+    command: sh /docker-dev.sh
+    deploy:
+      resources:
+        limits:
+          memory: 640M
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/media-service/src:/app/services/media-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  certificate-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/certificate-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/certificate-service/src:/app/services/certificate-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  analytics-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/analytics-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/analytics-service/src:/app/services/analytics-service/src:delegated
+      - ./packages:/app/packages:delegated
+
+  # ── ai profile ───────────────────────────────────────────────────────────────
+
+  ai-service:
+    build:
+      target: svc-build
+    working_dir: /app/services/ai-service
+    command: sh /docker-dev.sh
+    <<: *dev-deploy
+    environment: *dev-env
+    volumes:
+      - ./scripts/docker-dev.sh:/docker-dev.sh:ro
+      - ./services/ai-service/src:/app/services/ai-service/src:delegated
+      - ./packages:/app/packages:delegated

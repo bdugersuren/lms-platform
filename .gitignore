@@ -37,6 +37,9 @@ Thumbs.db
 
 # Docker
 .docker/
+VOLUMES/*
+!VOLUMES/.gitignore
+!VOLUMES/README.md
 
 # Coverage
 coverage/

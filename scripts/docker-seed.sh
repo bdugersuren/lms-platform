@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
 # LMS Platform — Docker Seed Script
-# Runs seed.ts for every service that has one, connecting to PostgreSQL
-# via localhost (the exposed port 5432). Runs on the HOST machine.
+# Runs seed.ts for every service that has a Prisma schema, using each service
+# container's Node/pnpm toolchain and the Docker network PostgreSQL hostname.
 #
 # Requirements:
-#   - docker compose up -d (postgres container must be running)
-#   - node >= 20 and pnpm >= 9 installed on the host
-#   - pnpm install already run (bootstrap)
+#   - docker compose up -d postgres
+#   - service images built with docker compose build, or allowed to build on run
 # =============================================================================
 set -euo pipefail
 
@@ -23,7 +22,7 @@ set -a; source .env; set +a
 
 PG_USER="${POSTGRES_USER:-lms}"
 PG_PASS="${POSTGRES_PASSWORD:-lms_secret_change_me}"
-PG_HOST="localhost"
+PG_HOST="postgres"
 PG_PORT="${POSTGRES_PORT:-5432}"
 
 # ── Verify postgres is reachable ─────────────────────────────────────────────
@@ -32,7 +31,6 @@ if ! docker compose exec postgres pg_isready -U "$PG_USER" -q 2>/dev/null; then
   exit 1
 fi
 
-# ── Service → database name mapping ─────────────────────────────────────────
 declare -A SVC_DB=(
   ["services/auth-service"]="auth_db"
   ["services/course-service"]="course_db"
@@ -65,26 +63,29 @@ for SERVICE in \
   "services/certificate-service" \
   "services/analytics-service"
 do
-  PKG="$ROOT_DIR/$SERVICE/package.json"
+  SCHEMA="$ROOT_DIR/$SERVICE/prisma/schema.prisma"
   SEED_FILE="$ROOT_DIR/$SERVICE/prisma/seed.ts"
 
-  if [ ! -f "$SEED_FILE" ]; then
-    continue
-  fi
-
-  if ! jq -e '.scripts.seed' "$PKG" > /dev/null 2>&1; then
+  if [ ! -f "$SCHEMA" ] || [ ! -f "$SEED_FILE" ]; then
     continue
   fi
 
   DB_NAME="${SVC_DB[$SERVICE]}"
   DB_URL="postgresql://$PG_USER:$PG_PASS@$PG_HOST:$PG_PORT/$DB_NAME"
+  SVC_NAME="${SERVICE#services/}"
+  WORKDIR="/app/$SERVICE"
+  SEED_CMD="cd $WORKDIR && pnpm exec prisma db push --schema prisma/schema.prisma && pnpm exec ts-node prisma/seed.ts"
 
   echo "▶ Seeding $SERVICE (db: $DB_NAME) ..."
-  if (
-    export DATABASE_URL="$DB_URL"
-    cd "$ROOT_DIR/$SERVICE"
-    pnpm run seed
-  ); then
+  if docker compose ps --status running --services 2>/dev/null | grep -qx "$SVC_NAME"; then
+    RUN_OK=0
+    docker compose exec -e DATABASE_URL="$DB_URL" "$SVC_NAME" sh -c "$SEED_CMD" || RUN_OK=$?
+  else
+    RUN_OK=0
+    docker compose run --rm --no-deps -e DATABASE_URL="$DB_URL" "$SVC_NAME" sh -c "$SEED_CMD" || RUN_OK=$?
+  fi
+
+  if [ "$RUN_OK" -eq 0 ]; then
     echo "  ✓ $SERVICE"
     SEEDED=$((SEEDED + 1))
   else

@@ -1,10 +1,65 @@
-**/node_modules
-**/dist
-**/.git
-**/.env
-**/.env.local
-**/*.log
-**/coverage
-**/.nyc_output
+# =============================================================================
+# .dockerignore — monorepo root
+# Reduces Docker build context from ~GB to ~MB.
+# Docker sends the entire context directory to the daemon before any build
+# starts. A proper .dockerignore is the single highest-leverage optimization
+# for WSL2 where cross-boundary filesystem I/O is slow.
+# =============================================================================
+
+# ── Dependencies (rebuilt inside Docker) ────────────────────────────────────
+**/node_modules/
+**/.pnpm-store/
+
+# ── Build outputs (rebuilt inside Docker) ───────────────────────────────────
+**/dist/
+**/build/
+**/.next/
 **/*.tsbuildinfo
-**/prisma/generated
+
+# ── Git ──────────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+
+# ── Dev tooling that never enters the image ──────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+**/*.log
+**/logs/
+
+# ── OS artifacts ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Test artifacts ────────────────────────────────────────────────────────────
+**/coverage/
+**/.nyc_output/
+**/__snapshots__/
+
+# ── Docker files (not needed inside image) ───────────────────────────────────
+**/Dockerfile*
+**/.dockerignore
+docker-compose*.yml
+
+# ── Secrets (NEVER copy into image) ──────────────────────────────────────────
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+# ── Generated Prisma ──────────────────────────────────────────────────────────
+**/prisma/generated/
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.zip
+*.seed
+*.pid
+*.pid.lock
+infra/monitoring/
+docs/
+VOLUMES/

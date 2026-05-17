@@ -87,3 +87,25 @@ bash scripts/docker-seed.sh
 pnpm run seed
 
 ```
+
+
+
+
+Тохиргоо дууссан. Ашиглах арга:
+
+Хөгжүүлэлтийн үед (AI-гүй, санах хэмнэнэ):
+
+
+docker compose up -d
+Хөгжүүлэлт дууссаны дараа AI-тай бүгдийг эхэлэхэд:
+
+
+docker compose --profile ai up -d
+Зөвхөн AI-г нэмж асаахад (бусад сервисүүд аль хэдийн ажиллаж байгаа үед):
+
+
+docker compose --profile ai up -d ollama ai-service
+AI-г зогсооход:
+
+
+docker compose stop ollama ai-service

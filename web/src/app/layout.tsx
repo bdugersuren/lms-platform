@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Providers } from '@/components/providers';
+import { TenantProvider } from '@/lib/tenant-context';
+import { DynamicTheme } from '@/components/tenant/dynamic-theme';
+import { getRequestTenant } from '@/lib/get-tenant';
 import './globals.css';
 
 const inter = Inter({
@@ -8,20 +11,41 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
-export const metadata: Metadata = {
-  title: 'LMS Platform',
-  description: 'Enterprise Learning Management System',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const tenant = await getRequestTenant();
+  return {
+    title: tenant.seo.title,
+    description: tenant.seo.description,
+    keywords: tenant.seo.keywords,
+    openGraph: {
+      title: tenant.seo.title,
+      description: tenant.seo.description,
+      images: tenant.seo.ogImage ? [tenant.seo.ogImage] : [],
+    },
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const tenant = await getRequestTenant();
+
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang={tenant.locale === 'en' ? 'en' : 'mn'} className={inter.variable}>
+      <head>
+        {tenant.branding.favicon && (
+          <link rel="icon" href={tenant.branding.favicon} />
+        )}
+      </head>
       <body className="font-sans antialiased">
-        <Providers>{children}</Providers>
+        <DynamicTheme branding={tenant.branding} />
+        <Providers>
+          <TenantProvider config={tenant}>
+            {children}
+          </TenantProvider>
+        </Providers>
       </body>
     </html>
   );

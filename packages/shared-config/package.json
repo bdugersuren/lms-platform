@@ -5,6 +5,13 @@
   "description": "Shared NestJS configuration factories with Joi validation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -12,12 +19,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@nestjs/config": "^3.2.3",
-    "joi": "^17.13.1"
+    "@nestjs/config": "catalog:",
+    "joi": "catalog:"
   },
   "devDependencies": {
-    "@nestjs/common": "^10.3.10",
-    "@types/node": "^20.14.0",
-    "typescript": "^5.4.5"
+    "@nestjs/common": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   }
 }

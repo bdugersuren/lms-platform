@@ -3,3 +3,72 @@ packages:
   - 'services/*'
   - 'packages/*'
   - 'web'
+
+# pnpm catalog: single source of truth for shared dependency versions.
+# Services reference these as "catalog:" instead of pinning versions individually.
+# This ensures every service uses the identical resolution and reduces lockfile size.
+catalog:
+  # NestJS core
+  '@nestjs/common': ^10.3.10
+  '@nestjs/core': ^10.3.10
+  '@nestjs/config': ^3.2.3
+  '@nestjs/jwt': ^10.2.0
+  '@nestjs/microservices': ^10.3.10
+  '@nestjs/passport': ^10.0.3
+  '@nestjs/platform-express': ^10.3.10
+  '@nestjs/swagger': ^7.4.0
+  '@nestjs/terminus': ^10.2.3
+  # NestJS extras
+  '@nestjs/axios': ^3.0.2
+  '@nestjs/websockets': ^10.3.10
+  '@nestjs/platform-socket.io': ^10.3.10
+  # Prisma
+  '@prisma/client': ^5.16.1
+  'prisma': ^5.16.1
+  # Runtime core
+  'rxjs': ^7.8.1
+  'reflect-metadata': ^0.2.2
+  'class-transformer': ^0.5.1
+  'class-validator': ^0.14.1
+  # Messaging
+  'amqp-connection-manager': ^4.1.14
+  'amqplib': ^0.10.4
+  # Cache / storage
+  'ioredis': ^5.4.1
+  'minio': ^8.0.1
+  # Auth
+  'passport': ^0.7.0
+  'passport-jwt': ^4.0.1
+  # HTTP / server
+  'axios': ^1.7.7
+  'express': ^4.19.2
+  'multer': ^1.4.5-lts.1
+  'socket.io': ^4.7.5
+  # Validation / config
+  'joi': ^17.13.1
+  # Logging
+  'nest-winston': ^1.9.7
+  'winston': ^3.13.0
+  'winston-daily-rotate-file': ^5.0.0
+  # Notification
+  'nodemailer': ^6.9.14
+  # Utilities
+  'uuid': ^9.0.1
+  'bcryptjs': ^2.4.3
+  'slugify': ^1.6.6
+  'qrcode': ^1.5.4
+  # Dev — TypeScript toolchain
+  'typescript': ^5.4.5
+  '@types/node': ^20.14.0
+  'ts-node': ^10.9.2
+  'tsconfig-paths': ^4.2.0
+  'nodemon': ^3.1.4
+  # Dev — type stubs
+  '@types/amqplib': ^0.10.5
+  '@types/bcryptjs': ^2.4.6
+  '@types/express': ^4.17.21
+  '@types/multer': ^1.4.12
+  '@types/nodemailer': ^6.4.15
+  '@types/passport-jwt': ^4.0.1
+  '@types/qrcode': ^1.5.5
+  '@types/uuid': ^9.0.8

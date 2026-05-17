@@ -7,18 +7,31 @@ export const api = axios.create({
   withCredentials: false,
 });
 
-// Attach access token to every request
+function getTenantSlugFromHost(): string | null {
+  if (typeof window === 'undefined') return null;
+  const hostname = window.location.hostname;
+  const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN ?? 'platform.mn';
+  if (hostname === 'localhost' || hostname.includes('127.0.0.1')) return null;
+  if (hostname.endsWith(`.${platformDomain}`)) {
+    return hostname.slice(0, -(platformDomain.length + 1));
+  }
+  return null;
+}
+
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = useAuthStore.getState().accessToken;
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    const tenantSlug = getTenantSlugFromHost();
+    if (tenantSlug) {
+      config.headers['x-tenant-slug'] = tenantSlug;
+    }
   }
   return config;
 });
 
-// Normalize error messages + auto-logout on 401
 api.interceptors.response.use(
   (response) => response,
   (error) => {

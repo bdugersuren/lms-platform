@@ -4,17 +4,44 @@
   "private": true,
   "description": "Enterprise-grade AI-native Learning Management System — monorepo root",
   "scripts": {
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down -v",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,json,md}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,json,md}\" --ignore-path .gitignore",
+    "prisma:generate": "turbo run prisma:generate",
+    "docker:infra": "docker compose up -d",
+    "docker:core": "docker compose --profile core up -d",
+    "docker:learn": "docker compose --profile core --profile learn up -d",
+    "docker:finance": "docker compose --profile core --profile finance up -d",
+    "docker:ops": "docker compose --profile core --profile ops up -d",
+    "docker:full": "docker compose --profile core --profile learn --profile finance --profile ops --profile frontend up -d",
+    "docker:ai": "docker compose --profile core --profile ai up -d",
+    "docker:down": "docker compose --profile core --profile learn --profile finance --profile ops --profile frontend --profile ai down",
+    "docker:down:volumes": "docker compose --profile core --profile learn --profile finance --profile ops --profile frontend --profile ai down -v",
     "docker:logs": "docker compose logs -f",
+    "docker:build": "DOCKER_BUILDKIT=1 docker compose build",
+    "docker:build:nocache": "DOCKER_BUILDKIT=1 docker compose build --no-cache",
     "bootstrap": "bash scripts/bootstrap.sh",
     "migrate": "bash scripts/migrate.sh",
     "seed": "bash scripts/seed.sh",
-    "build": "pnpm -r run build",
-    "lint": "pnpm -r run lint",
-    "format": "prettier --write \"**/*.{ts,json,md}\" --ignore-path .gitignore",
-    "test": "pnpm -r run test",
-    "test:e2e": "pnpm -r run test:e2e"
+    "dev:gateway": "pnpm --filter @lms/gateway start:dev",
+    "dev:auth": "pnpm --filter @lms/auth-service start:dev",
+    "dev:course": "pnpm --filter @lms/course-service start:dev",
+    "dev:enrollment": "pnpm --filter @lms/enrollment-service start:dev",
+    "dev:quiz": "pnpm --filter @lms/quiz-service start:dev",
+    "dev:assignment": "pnpm --filter @lms/assignment-service start:dev",
+    "dev:wallet": "pnpm --filter @lms/wallet-service start:dev",
+    "dev:payment": "pnpm --filter @lms/payment-service start:dev",
+    "dev:ai": "pnpm --filter @lms/ai-service start:dev",
+    "dev:notification": "pnpm --filter @lms/notification-service start:dev",
+    "dev:media": "pnpm --filter @lms/media-service start:dev",
+    "dev:certificate": "pnpm --filter @lms/certificate-service start:dev",
+    "dev:analytics": "pnpm --filter @lms/analytics-service start:dev",
+    "dev:shared": "turbo run build:watch --filter='@lms/shared-*'"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
@@ -26,11 +53,12 @@
     "prettier": "^3.3.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "turbo": "^2.3.3",
     "typescript": "^5.4.5"
   },
   "engines": {
     "node": ">=20.0.0",
-    "pnpm": ">=9.0.0"
+    "pnpm": ">=9.5.0"
   },
-  "packageManager": "pnpm@9.4.0"
+  "packageManager": "pnpm@9.15.9"
 }

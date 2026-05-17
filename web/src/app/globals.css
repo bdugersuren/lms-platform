@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Default tenant color tokens — overridden by DynamicTheme per tenant */
+:root {
+  --color-primary: 99 102 241;
+  --color-secondary: 139 92 246;
+  --color-accent: 6 182 212;
+  --font-tenant: '';
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -10,6 +18,11 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply text-gray-900 bg-white;
   }
 }
 
@@ -20,5 +33,24 @@
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  .gradient-primary {
+    background: linear-gradient(
+      135deg,
+      rgb(var(--color-primary)) 0%,
+      rgb(var(--color-secondary)) 100%
+    );
+  }
+
+  .text-gradient-primary {
+    background: linear-gradient(
+      135deg,
+      rgb(var(--color-primary)) 0%,
+      rgb(var(--color-secondary)) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }

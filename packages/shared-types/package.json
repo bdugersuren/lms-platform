@@ -5,6 +5,13 @@
   "description": "Shared TypeScript interfaces and types for the LMS platform",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -12,6 +19,6 @@
     "clean": "rm -rf dist"
   },
   "devDependencies": {
-    "typescript": "^5.4.5"
+    "typescript": "catalog:"
   }
 }
