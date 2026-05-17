@@ -7,7 +7,7 @@
   --color-primary: 99 102 241;
   --color-secondary: 139 92 246;
   --color-accent: 6 182 212;
-  --font-tenant: '';
+  --font-tenant: system-ui;
 }
 
 @layer base {

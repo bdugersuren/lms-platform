@@ -4,7 +4,7 @@ import type { Certificate, CertificateList, VerifyResult, CreateCertificateDto }
 
 interface ApiSuccess<T> { success: boolean; data: T; message?: string; }
 
-export function useCertificates(params?: { search?: string; limit?: number; offset?: number }) {
+export function useCertificates(params?: { search?: string; limit?: number; offset?: number; enabled?: boolean }) {
   return useQuery<CertificateList>({
     queryKey: ['certificates', params],
     queryFn: async () => {
@@ -15,6 +15,7 @@ export function useCertificates(params?: { search?: string; limit?: number; offs
       const { data } = await api.get<ApiSuccess<CertificateList>>(`/certificates${q.toString() ? `?${q}` : ''}`);
       return data.data;
     },
+    enabled: params?.enabled ?? true,
   });
 }
 

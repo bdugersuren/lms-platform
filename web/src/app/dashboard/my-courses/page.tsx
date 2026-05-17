@@ -1,10 +1,21 @@
 'use client';
 
 import Link from 'next/link';
+import { useMemo } from 'react';
+import { useCertificates } from '@/hooks/use-certificate';
 import { useMyEnrollments } from '@/hooks/use-enrollment';
+import type { Certificate } from '@/types/certificate';
 
 export default function MyCoursesPage() {
   const { data: enrollments, isLoading, error } = useMyEnrollments();
+  const { data: certificates } = useCertificates({ limit: 100 });
+  const certificateByCourseId = useMemo(() => {
+    const map = new Map<string, Certificate>();
+    certificates?.items.forEach((cert) => {
+      if (cert.courseId && cert.status === 'ISSUED') map.set(cert.courseId, cert);
+    });
+    return map;
+  }, [certificates]);
 
   if (isLoading) {
     return (
@@ -103,9 +114,40 @@ export default function MyCoursesPage() {
                     )}
 
                     {enrollment.completed ? (
-                      <div className="flex items-center gap-2 text-emerald-600 text-sm font-medium">
-                        <span>✓</span>
-                        <span>Дууссан</span>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-emerald-600 text-sm font-medium">
+                          <span>✓</span>
+                          <span>Дууссан</span>
+                        </div>
+                        {certificateByCourseId.get(enrollment.courseId) ? (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                            <p className="text-xs font-semibold text-amber-900">Сертификат бэлэн</p>
+                            <p className="text-xs text-amber-700 mt-0.5 line-clamp-1">
+                              {certificateByCourseId.get(enrollment.courseId)?.recipientName}
+                            </p>
+                            <div className="mt-2 flex gap-2">
+                              <Link
+                                href="/certificates"
+                                className="flex-1 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium text-center hover:bg-amber-600 transition-colors"
+                              >
+                                Харах
+                              </Link>
+                              <Link
+                                href={`/certificates/verify/${certificateByCourseId.get(enrollment.courseId)?.verifyCode}`}
+                                className="flex-1 py-2 bg-white text-amber-700 border border-amber-200 rounded-lg text-xs font-medium text-center hover:bg-amber-100 transition-colors"
+                              >
+                                Баталгаажуулах
+                              </Link>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-xs font-medium text-slate-600">Сертификат үүсэж байна</p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              Курс дууссан тул удахгүй энд харагдана.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <Link

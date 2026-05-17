@@ -135,9 +135,12 @@ export class ProgressService {
   }
 
   private async recalculateEnrollmentProgress(enrollmentId: string) {
-    const progresses = await this.prisma.lessonProgress.findMany({
-      where: { enrollmentId },
-    });
+    const [enrollment, progresses] = await Promise.all([
+      this.prisma.enrollment.findUnique({ where: { id: enrollmentId } }),
+      this.prisma.lessonProgress.findMany({ where: { enrollmentId } }),
+    ]);
+
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
 
     const total = progresses.length;
     if (total === 0) return;
@@ -149,7 +152,7 @@ export class ProgressService {
     const totalScore =
       progresses.reduce((sum, lp) => sum + (lp.score ?? 0), 0) / total;
 
-    await this.prisma.enrollment.update({
+    const updatedEnrollment = await this.prisma.enrollment.update({
       where: { id: enrollmentId },
       data: {
         progressPercent,
@@ -158,6 +161,25 @@ export class ProgressService {
         completedAt: allCompleted ? new Date() : null,
       },
     });
+
+    if (allCompleted && !enrollment.completed) {
+      let courseTitle: string | undefined;
+      try {
+        const course = await this.courseClient.getCourseBasic(enrollment.courseId);
+        courseTitle = course.title;
+      } catch (err) {
+        this.logger.warn(`Could not fetch course title for certificate event: ${(err as Error).message}`);
+      }
+
+      this.messaging.publishEvent('enrollment.completed', {
+        enrollmentId,
+        courseId: enrollment.courseId,
+        userId: enrollment.studentId,
+        studentId: enrollment.studentId,
+        courseTitle,
+        completedAt: updatedEnrollment.completedAt?.toISOString() ?? new Date().toISOString(),
+      });
+    }
   }
 
   async getProgress(enrollmentId: string, studentId: string) {

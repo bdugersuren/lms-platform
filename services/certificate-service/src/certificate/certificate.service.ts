@@ -20,6 +20,13 @@ export class CertificateService {
   async issue(dto: CreateCertificateDto) {
     const { userId, title, recipientName, courseId, description, issuerName, completedAt, expiresAt } = dto;
 
+    if (courseId) {
+      const existing = await this.prisma.certificate.findFirst({
+        where: { userId, courseId, status: CertificateStatus.ISSUED },
+      });
+      if (existing) return existing;
+    }
+
     const cert = await this.prisma.certificate.create({
       data: {
         userId,

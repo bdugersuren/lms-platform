@@ -127,6 +127,7 @@ export function useCompleteLesson() {
     onSuccess: (_data, { enrollmentId }) => {
       void qc.invalidateQueries({ queryKey: ['enrollments', enrollmentId] });
       void qc.invalidateQueries({ queryKey: ['enrollments', 'my'] });
+      void qc.invalidateQueries({ queryKey: ['certificates'] });
     },
   });
 }

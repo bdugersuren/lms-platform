@@ -1,15 +1,9 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import { TenantProvider } from '@/lib/tenant-context';
 import { DynamicTheme } from '@/components/tenant/dynamic-theme';
 import { getRequestTenant } from '@/lib/get-tenant';
 import './globals.css';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-});
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getRequestTenant();
@@ -33,7 +27,7 @@ export default async function RootLayout({
   const tenant = await getRequestTenant();
 
   return (
-    <html lang={tenant.locale === 'en' ? 'en' : 'mn'} className={inter.variable}>
+    <html lang={tenant.locale === 'en' ? 'en' : 'mn'}>
       <head>
         {tenant.branding.favicon && (
           <link rel="icon" href={tenant.branding.favicon} />

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCourse, usePublishCourse, useArchiveCourse, useDeleteCourse } from '@/hooks/use-courses';
 import { useCheckEnrollment, useEnroll, useUnenroll, useEnrollmentByCourse } from '@/hooks/use-enrollment';
 import { useCreatePayment } from '@/hooks/use-payment';
+import { useCertificates } from '@/hooks/use-certificate';
 import { useMe } from '@/hooks/use-auth';
 import { useAuthStore } from '@/store/auth.store';
 import type { CourseModule } from '@/types/course';
@@ -33,7 +34,9 @@ export default function CourseDetailPage() {
   const { data: user } = useMe();
 
   const { data: enrollmentCheck } = useCheckEnrollment(id);
-  const { data: enrollment } = useEnrollmentByCourse(enrollmentCheck?.enrolled ? id : null);
+  const isEnrolled = enrollmentCheck?.enrolled ?? false;
+  const { data: enrollment } = useEnrollmentByCourse(isEnrolled ? id : null);
+  const { data: certificates } = useCertificates({ limit: 100, enabled: isAuthenticated && isEnrolled });
   const enroll = useEnroll();
   const unenroll = useUnenroll();
 
@@ -47,8 +50,11 @@ export default function CourseDetailPage() {
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const isOwner = course?.instructorId === user?.id;
   const canManage = isOwner || isAdmin;
-  const isEnrolled = enrollmentCheck?.enrolled ?? false;
   const isPaidCourse = Number(course?.price ?? 0) > 0;
+  const courseCertificate = useMemo(
+    () => certificates?.items.find((cert) => cert.courseId === id && cert.status === 'ISSUED'),
+    [certificates, id],
+  );
 
   const handleBuy = () => {
     if (!course) return;
@@ -170,19 +176,52 @@ export default function CourseDetailPage() {
               </div>
               <p className="text-xs text-slate-500 text-right">{enrollment?.progressPercent ?? 0}% дууссан</p>
             </div>
-            <Link
-              href="/dashboard/my-courses"
-              className="block w-full py-3 bg-indigo-600 text-white rounded-lg font-bold text-center hover:bg-indigo-700 transition-colors"
-            >
-              Үргэлжлүүлэх →
-            </Link>
-            <button
-              onClick={handleUnenroll}
-              disabled={unenroll.isPending}
-              className="w-full py-2 text-slate-400 text-sm hover:text-red-500 transition-colors"
-            >
-              {unenroll.isPending ? 'Цуцалж байна...' : 'Бүртгэл цуцлах'}
-            </button>
+            {enrollment?.completed ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm font-semibold text-amber-900">Сургалт амжилттай дууссан</p>
+                {courseCertificate ? (
+                  <>
+                    <p className="text-xs text-amber-700 mt-1 line-clamp-1">
+                      Сертификат: {courseCertificate.recipientName}
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Link
+                        href="/certificates"
+                        className="py-2 bg-amber-500 text-white rounded-lg text-xs font-medium text-center hover:bg-amber-600 transition-colors"
+                      >
+                        Харах
+                      </Link>
+                      <Link
+                        href={`/certificates/verify/${courseCertificate.verifyCode}`}
+                        className="py-2 bg-white text-amber-700 border border-amber-200 rounded-lg text-xs font-medium text-center hover:bg-amber-100 transition-colors"
+                      >
+                        Баталгаажуулах
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-amber-700 mt-1">
+                    Сертификат үүсэж байна. Түр хүлээгээд дахин шалгана уу.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <Link
+                href="/dashboard/my-courses"
+                className="block w-full py-3 bg-indigo-600 text-white rounded-lg font-bold text-center hover:bg-indigo-700 transition-colors"
+              >
+                Үргэлжлүүлэх →
+              </Link>
+            )}
+            {!enrollment?.completed && (
+              <button
+                onClick={handleUnenroll}
+                disabled={unenroll.isPending}
+                className="w-full py-2 text-slate-400 text-sm hover:text-red-500 transition-colors"
+              >
+                {unenroll.isPending ? 'Цуцалж байна...' : 'Бүртгэл цуцлах'}
+              </button>
+            )}
           </div>
         ) : isPaidCourse ? (
           <div className="space-y-2">
