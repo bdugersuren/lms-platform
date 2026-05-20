@@ -1,14 +1,16 @@
 import {
   ConflictException,
   ForbiddenException,
+  GoneException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { CourseStatus, ProgressStatus } from '@prisma/client';
 import { ApiResponseBuilder } from '@lms/shared-utils';
-import { JwtPayload, UserRole } from '@lms/shared-types';
+import { EventTypes, JwtPayload, UserRole } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
+import { isEnrollmentCutoverEnabled } from '../common/feature-flags';
 
 @Injectable()
 export class EnrollmentService {
@@ -18,6 +20,12 @@ export class EnrollmentService {
   ) {}
 
   async enroll(courseId: string, user: JwtPayload) {
+    if (isEnrollmentCutoverEnabled()) {
+      throw new GoneException(
+        'Enrollment is now managed by enrollment-service. Use POST /api/enrollments with body {"courseId":"..."}.',
+      );
+    }
+
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
       include: {
@@ -85,7 +93,7 @@ export class EnrollmentService {
       return created;
     });
 
-    this.messaging.publishEvent('course.student.enrolled', {
+    this.messaging.publishEvent(EventTypes.COURSE_STUDENT_ENROLLED, {
       enrollmentId: enrollment.id,
       courseId,
       studentId: user.sub,
@@ -96,6 +104,12 @@ export class EnrollmentService {
   }
 
   async unenroll(courseId: string, user: JwtPayload) {
+    if (isEnrollmentCutoverEnabled()) {
+      throw new GoneException(
+        'Unenrollment is now managed by enrollment-service. Use DELETE /api/enrollments/by-course/:courseId.',
+      );
+    }
+
     const enrollment = await this.prisma.courseEnrollment.findUnique({
       where: { courseId_studentId: { courseId, studentId: user.sub } },
     });

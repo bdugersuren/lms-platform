@@ -17,13 +17,27 @@ async function bootstrap(): Promise<void> {
     logger: WinstonModule.createLogger({ instance: logger }),
   });
 
+  const rabbitmqUrl = process.env.RABBITMQ_URL ?? 'amqp://localhost:5672';
+  const dlqArgs = { 'x-dead-letter-exchange': 'lms.dead-letter', 'x-dead-letter-routing-key': 'dead' };
+
   // Consume from payment.publisher — where PaymentService's ClientProxy publishes via sendToQueue
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
-      urls: [process.env.RABBITMQ_URL ?? 'amqp://localhost:5672'],
+      urls: [rabbitmqUrl],
       queue: 'payment.publisher',
-      queueOptions: { durable: true },
+      queueOptions: { durable: true, arguments: dlqArgs },
+      noAck: false,
+    },
+  });
+
+  // Consume course-service content events for local progress projections.
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.RMQ,
+    options: {
+      urls: [rabbitmqUrl],
+      queue: 'course.publisher',
+      queueOptions: { durable: true, arguments: dlqArgs },
       noAck: false,
     },
   });

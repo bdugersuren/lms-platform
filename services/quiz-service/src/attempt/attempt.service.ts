@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuizService } from '../quiz/quiz.service';
+import { EventTypes } from '@lms/shared-types';
 import { MessagingService } from '../messaging/messaging.service';
 import { SubmitAttemptDto } from './dto/submit-attempt.dto';
 
@@ -119,7 +120,7 @@ export class AttemptService {
       include: { answers: true },
     });
 
-    this.messaging.publishEvent('quiz.attempt.submitted', {
+    this.messaging.publishEvent(EventTypes.QUIZ_ATTEMPT_SUBMITTED, {
       quizId,
       studentId,
       attemptId,

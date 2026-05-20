@@ -15,7 +15,13 @@
     "seed": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "lint": "eslint src --ext .ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "migrate:phase3": "ts-node -r tsconfig-paths/register scripts/migrate-phase3.ts",
+    "migrate:phase3:dry": "DRY_RUN=true ts-node -r tsconfig-paths/register scripts/migrate-phase3.ts",
+    "reconcile": "ts-node -r tsconfig-paths/register scripts/reconcile.ts",
+    "rebuild:projections": "ts-node -r tsconfig-paths/register scripts/rebuild-projections.ts",
+    "rebuild:projections:dry": "DRY_RUN=true ts-node -r tsconfig-paths/register scripts/rebuild-projections.ts",
+    "validate:cutover": "ts-node -r tsconfig-paths/register scripts/validate-cutover.ts"
   },
   "dependencies": {
     "@lms/shared-auth": "workspace:*",

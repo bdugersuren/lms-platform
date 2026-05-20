@@ -14,8 +14,8 @@ export const SEED_IDS = {
   STUDENT_3:    'a0000001-0000-0000-0000-000000000007',
 };
 
-const ADMIN_PASS   = 'Admin1234!';
-const STUDENT_PASS = 'Student1234!';
+const ADMIN_PASS   = 'Admin!1234';
+const STUDENT_PASS = 'Student!1234';
 
 const USERS: Array<{
   id: string;
@@ -23,13 +23,13 @@ const USERS: Array<{
   role: UserRole;
   pass: string;
 }> = [
-  { id: SEED_IDS.SUPER_ADMIN,  email: 'superadmin@lms.mn',   role: 'SUPER_ADMIN',  pass: ADMIN_PASS },
-  { id: SEED_IDS.ADMIN_1,      email: 'admin@lms.mn',        role: 'ADMIN',        pass: ADMIN_PASS },
-  { id: SEED_IDS.INSTRUCTOR_1, email: 'instructor1@lms.mn',  role: 'INSTRUCTOR',   pass: ADMIN_PASS },
-  { id: SEED_IDS.INSTRUCTOR_2, email: 'instructor2@lms.mn',  role: 'INSTRUCTOR',   pass: ADMIN_PASS },
-  { id: SEED_IDS.STUDENT_1,    email: 'student1@lms.mn',     role: 'STUDENT',      pass: STUDENT_PASS },
-  { id: SEED_IDS.STUDENT_2,    email: 'student2@lms.mn',     role: 'STUDENT',      pass: STUDENT_PASS },
-  { id: SEED_IDS.STUDENT_3,    email: 'student3@lms.mn',     role: 'STUDENT',      pass: STUDENT_PASS },
+  { id: SEED_IDS.SUPER_ADMIN,  email: 'superadmin@know.mn',   role: 'SUPER_ADMIN',  pass: ADMIN_PASS },
+  { id: SEED_IDS.ADMIN_1,      email: 'admin@know.mn',        role: 'ADMIN',        pass: ADMIN_PASS },
+  { id: SEED_IDS.INSTRUCTOR_1, email: 'instructor1@know.mn',  role: 'INSTRUCTOR',   pass: ADMIN_PASS },
+  { id: SEED_IDS.INSTRUCTOR_2, email: 'instructor2@know.mn',  role: 'INSTRUCTOR',   pass: ADMIN_PASS },
+  { id: SEED_IDS.STUDENT_1,    email: 'student1@know.mn',     role: 'STUDENT',      pass: STUDENT_PASS },
+  { id: SEED_IDS.STUDENT_2,    email: 'student2@know.mn',     role: 'STUDENT',      pass: STUDENT_PASS },
+  { id: SEED_IDS.STUDENT_3,    email: 'student3@know.mn',     role: 'STUDENT',      pass: STUDENT_PASS },
 ];
 
 async function main() {

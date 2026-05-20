@@ -4,9 +4,12 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { QPayService } from '../qpay/qpay.service';
 import { SocialPayService } from '../socialpay/socialpay.service';
 import { MockPaymentService } from '../mock/mock-payment.service';
@@ -20,6 +23,7 @@ export class PaymentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messaging: MessagingService,
+    private readonly outbox: OutboxService,
     private readonly qpay: QPayService,
     private readonly socialPay: SocialPayService,
     private readonly mockPayment: MockPaymentService,
@@ -159,22 +163,37 @@ export class PaymentService {
   }
 
   async completePayment(paymentId: string, externalRef?: string) {
-    const payment = await this.prisma.payment.update({
-      where: { id: paymentId },
-      data: {
-        status: 'COMPLETED',
-        externalRef,
-        completedAt: new Date(),
-      },
-    });
+    const payment = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: 'COMPLETED',
+          externalRef,
+          completedAt: new Date(),
+        },
+      });
 
-    this.messaging.publishEvent('payment.confirmed', {
-      paymentId: payment.id,
-      userId: payment.userId,
-      courseId: payment.courseId,
-      amount: payment.amount.toString(),
-      currency: payment.currency,
-      provider: payment.provider,
+      await this.outbox.enqueue(tx, {
+        eventId: randomUUID(),
+        eventType: EventTypes.PAYMENT_CONFIRMED,
+        eventVersion: 1,
+        occurredAt: new Date().toISOString(),
+        producer: 'payment-service',
+        aggregateType: 'payment',
+        aggregateId: paymentId,
+        sequence: 1,
+        correlationId: paymentId,
+        payload: {
+          paymentId: updated.id,
+          userId: updated.userId,
+          courseId: updated.courseId,
+          amount: updated.amount.toString(),
+          currency: updated.currency,
+          provider: updated.provider,
+        },
+      });
+
+      return updated;
     });
 
     this.logger.log(`Payment completed: ${paymentId}`);

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { lastValueFrom } from 'rxjs';
 import { ENROLLMENT_RABBITMQ_CLIENT } from './messaging.constants';
 
 @Injectable()
@@ -10,9 +11,9 @@ export class MessagingService implements OnModuleDestroy {
     @Inject(ENROLLMENT_RABBITMQ_CLIENT) private readonly client: ClientProxy,
   ) {}
 
-  publishEvent<T extends object>(routingKey: string, data: T): void {
+  async publishEvent<T extends object>(routingKey: string, data: T): Promise<void> {
     const payload = { ...data, timestamp: new Date().toISOString() };
-    this.client.emit(routingKey, payload);
+    await lastValueFrom(this.client.emit(routingKey, payload));
     this.logger.debug(`Published event: ${routingKey}`);
   }
 

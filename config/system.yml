@@ -1,0 +1,168 @@
+# Purpose:
+# This is the beginner-friendly source-of-truth starter config for documentation generation.
+# Keep stable platform facts here so generated docs can be rebuilt from one place instead of copied by hand.
+
+platform:
+  name: LMS Platform
+  description: Enterprise-grade learning management platform
+
+services:
+  - name: gateway
+    kind: api-gateway
+    port: 3000
+    profile: core
+    description: Routes client API requests to backend services.
+
+  - name: auth-service
+    kind: backend-service
+    port: 3001
+    profile: core
+    database: auth_db
+    description: Handles login, registration, JWT tokens, and user auth records.
+
+  - name: web
+    kind: frontend
+    port: 3002
+    profile: frontend
+    description: Next.js student, instructor, and admin user interface.
+
+    
+  - name: course-service
+    kind: backend-service
+    port: 3003
+    profile: core
+    database: course_db
+    description: Owns courses, modules, lessons, skills, and course content.
+
+  - name: enrollment-service
+    kind: backend-service
+    port: 3004
+    profile: core
+    database: enrollment_db
+    description: Owns enrollments, lesson progress, and course completion state.
+
+  - name: quiz-service
+    kind: backend-service
+    port: 3005
+    profile: learn
+    database: quiz_db
+    description: Owns quizzes, questions, attempts, grading, and quiz results.
+
+  - name: assignment-service
+    kind: backend-service
+    port: 3006
+    profile: learn
+    database: assignment_db
+    description: Owns assignments, submissions, grading, and feedback.
+
+  - name: wallet-service
+    kind: backend-service
+    port: 3007
+    profile: finance
+    database: wallet_db
+    description: Owns wallets, balances, transactions, revenue shares, and payouts.
+
+  - name: payment-service
+    kind: backend-service
+    port: 3008
+    profile: finance
+    database: payment_db
+    description: Owns QPay, SocialPay, mock payments, payment checks, and webhooks.
+
+  - name: ai-service
+    kind: backend-service
+    port: 3009
+    profile: ai
+    database: ai_db
+    description: Owns AI tutor sessions, essay scoring, and recommendations.
+
+  - name: notification-service
+    kind: backend-service
+    port: 3010
+    profile: ops
+    database: notification_db
+    description: Owns in-app notifications, email delivery, and notification preferences.
+
+  - name: media-service
+    kind: backend-service
+    port: 3011
+    profile: ops
+    database: media_db
+    description: Owns media uploads, media metadata, subtitles, and transcode jobs.
+
+  - name: certificate-service
+    kind: backend-service
+    port: 3012
+    profile: ops
+    database: certificate_db
+    description: Owns certificates, QR codes, issue/revoke state, and public verification.
+
+  - name: analytics-service
+    kind: backend-service
+    port: 3013
+    profile: ops
+    database: analytics_db
+    description: Owns event history, KPI summaries, and analytics reports.
+
+
+
+seed_credentials:
+  note: Development seed users only. Do not use these values in production.
+  admin:
+    email: admin@know.mn
+    password: Admin!1234
+  instructor:
+    email: instructor1@know.mn
+    password: Admin!1234
+  student:
+    email: student1@know.mn
+    password: Student!1234
+
+docker_compose_profiles:
+  default:
+    description: Starts infrastructure only.
+    services:
+      - postgres
+      - redis
+      - rabbitmq
+      - minio
+
+  core:
+    description: Starts the minimum backend needed for auth, courses, enrollment, and API routing.
+    services:
+      - nginx
+      - gateway
+      - auth-service
+      - course-service
+      - enrollment-service
+
+  learn:
+    description: Starts learning assessment services.
+    services:
+      - quiz-service
+      - assignment-service
+
+  finance:
+    description: Starts payment and wallet services.
+    services:
+      - wallet-service
+      - payment-service
+
+  ops:
+    description: Starts operational support services.
+    services:
+      - notification-service
+      - media-service
+      - certificate-service
+      - analytics-service
+
+  frontend:
+    description: Starts the Next.js web application.
+    services:
+      - web
+
+  ai:
+    description: Starts local AI inference and AI service.
+    services:
+      - ollama
+      - ai-service

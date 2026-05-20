@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { TranscodeFormat, TranscodeStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventTypes } from '@lms/shared-types';
 import { MessagingService } from '../messaging/messaging.service';
 
 export class CreateTranscodeDto {
@@ -33,7 +34,7 @@ export class TranscodeService {
     });
 
     // Emit event — a separate worker process would pick this up and run FFmpeg
-    this.messaging.emit('media.transcode.queued', {
+    this.messaging.emit(EventTypes.MEDIA_TRANSCODE_QUEUED, {
       jobId: job.id,
       mediaFileId,
       sourceKey: file.key,

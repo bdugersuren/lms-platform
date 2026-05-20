@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ProgressService } from './progress.service';
 import { UpdateLessonProgressDto } from './dto/update-lesson-progress.dto';
+import { SubmitBlockAnswersDto } from './dto/submit-block-answers.dto';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 
 interface JwtUser {
@@ -27,6 +28,30 @@ interface JwtUser {
 @Controller('enrollments/:enrollmentId/progress')
 export class ProgressController {
   constructor(private readonly progressService: ProgressService) {}
+
+  @Post(':lessonId/start')
+  @ApiOperation({ summary: 'Start or unlock a lesson' })
+  async startLesson(
+    @CurrentUser() user: JwtUser,
+    @Param('enrollmentId', ParseUUIDPipe) enrollmentId: string,
+    @Param('lessonId', ParseUUIDPipe) lessonId: string,
+  ) {
+    const data = await this.progressService.startLesson(enrollmentId, lessonId, user.sub);
+    return ApiResponseBuilder.success(data, 'Lesson started');
+  }
+
+  @Post(':lessonId/blocks/:interactiveBlockId/submit')
+  @ApiOperation({ summary: 'Submit answers for an interactive block within a lesson' })
+  async submitBlockAnswersForLesson(
+    @CurrentUser() user: JwtUser,
+    @Param('enrollmentId', ParseUUIDPipe) enrollmentId: string,
+    @Param('lessonId', ParseUUIDPipe) lessonId: string,
+    @Param('interactiveBlockId', ParseUUIDPipe) interactiveBlockId: string,
+    @Body() dto: SubmitBlockAnswersDto,
+  ) {
+    const data = await this.progressService.submitBlockAnswers(enrollmentId, lessonId, interactiveBlockId, dto, user.sub);
+    return ApiResponseBuilder.success(data, 'Answers submitted');
+  }
 
   @Get()
   @ApiOperation({ summary: 'Get full progress for an enrollment' })

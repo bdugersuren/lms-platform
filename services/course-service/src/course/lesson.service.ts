@@ -1,13 +1,19 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ApiResponseBuilder } from '@lms/shared-utils';
-import { JwtPayload, UserRole } from '@lms/shared-types';
+import { CourseContentEventPatterns, JwtPayload, UserRole } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
+import { CourseEventsPublisher } from './course-events.publisher';
+
+type PrismaExecutor = PrismaService | Prisma.TransactionClient;
 
 @Injectable()
 export class LessonService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly courseEvents: CourseEventsPublisher,
+  ) {}
 
   async create(courseId: string, moduleId: string, dto: CreateLessonDto, user: JwtPayload) {
     const course = await this.prisma.course.findUnique({ where: { id: courseId } });
@@ -17,24 +23,38 @@ export class LessonService {
     const module = await this.prisma.module.findFirst({ where: { id: moduleId, courseId } });
     if (!module) throw new NotFoundException('Module not found');
 
-    const lesson = await this.prisma.lesson.create({
-      data: {
+    const lesson = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.lesson.create({
+        data: {
+          moduleId,
+          title: dto.title,
+          description: dto.description,
+          lessonType: dto.lessonType ?? 'TEXT',
+          sortOrder: dto.sortOrder ?? 0,
+          contentUrl: dto.contentUrl,
+          rawMarkdown: dto.rawMarkdown,
+          rawText: dto.rawText,
+          estimatedMinutes: dto.estimatedMinutes,
+          isPreview: dto.isPreview ?? false,
+          passingScore: dto.passingScore ?? 60,
+          unlockNextOnPass: dto.unlockNextOnPass ?? true,
+        },
+      });
+
+      await this.updateCourseTotals(courseId, tx);
+      const contentVersion = await this.courseEvents.bumpContentVersion(tx, courseId);
+      await this.courseEvents.enqueueLessonEvent(
+        tx,
+        CourseContentEventPatterns.LESSON_CREATED,
+        courseId,
         moduleId,
-        title: dto.title,
-        description: dto.description,
-        lessonType: dto.lessonType ?? 'TEXT',
-        sortOrder: dto.sortOrder ?? 0,
-        contentUrl: dto.contentUrl,
-        rawMarkdown: dto.rawMarkdown,
-        rawText: dto.rawText,
-        estimatedMinutes: dto.estimatedMinutes,
-        isPreview: dto.isPreview ?? false,
-        passingScore: dto.passingScore ?? 60,
-        unlockNextOnPass: dto.unlockNextOnPass ?? true,
-      },
+        created.id,
+        contentVersion,
+      );
+      return created;
     });
 
-    await this.updateCourseTotals(courseId);
+    await this.courseEvents.publishPending();
 
     return ApiResponseBuilder.success(lesson, 'Lesson created');
   }
@@ -106,9 +126,29 @@ export class LessonService {
     if (dto.passingScore !== undefined) data.passingScore = dto.passingScore;
     if (dto.unlockNextOnPass !== undefined) data.unlockNextOnPass = dto.unlockNextOnPass;
 
-    const updated = await this.prisma.lesson.update({ where: { id: lessonId }, data });
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.lesson.update({ where: { id: lessonId }, data });
 
-    if (dto.estimatedMinutes !== undefined) await this.updateCourseTotals(courseId);
+      if (dto.estimatedMinutes !== undefined) await this.updateCourseTotals(courseId, tx);
+
+      const contentVersion = await this.courseEvents.bumpContentVersion(tx, courseId);
+      await this.courseEvents.enqueueLessonEvent(
+        tx,
+        CourseContentEventPatterns.LESSON_UPDATED,
+        courseId,
+        moduleId,
+        lessonId,
+        contentVersion,
+      );
+
+      if (dto.sortOrder !== undefined && dto.sortOrder !== lesson.sortOrder) {
+        await this.courseEvents.enqueueLessonReordered(tx, courseId, contentVersion);
+      }
+
+      return result;
+    });
+
+    await this.courseEvents.publishPending();
 
     return ApiResponseBuilder.success(updated, 'Lesson updated');
   }
@@ -121,20 +161,39 @@ export class LessonService {
     const lesson = await this.prisma.lesson.findFirst({ where: { id: lessonId, moduleId } });
     if (!lesson) throw new NotFoundException('Lesson not found');
 
-    await this.prisma.lesson.delete({ where: { id: lessonId } });
-    await this.updateCourseTotals(courseId);
+    const module = await this.prisma.module.findFirst({ where: { id: moduleId, courseId } });
+    if (!module) throw new NotFoundException('Module not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.lesson.delete({ where: { id: lessonId } });
+      await this.updateCourseTotals(courseId, tx);
+      const contentVersion = await this.courseEvents.bumpContentVersion(tx, courseId);
+      await this.courseEvents.enqueueLessonDeleted(
+        tx,
+        courseId,
+        module,
+        lesson,
+        contentVersion,
+        new Date(),
+      );
+    });
+
+    await this.courseEvents.publishPending();
 
     return ApiResponseBuilder.success(null, 'Lesson deleted');
   }
 
-  async updateCourseTotals(courseId: string): Promise<void> {
-    const result = await this.prisma.lesson.aggregate({
+  async updateCourseTotals(
+    courseId: string,
+    db: PrismaExecutor = this.prisma,
+  ): Promise<void> {
+    const result = await db.lesson.aggregate({
       where: { module: { courseId } },
       _count: true,
       _sum: { estimatedMinutes: true },
     });
 
-    await this.prisma.course.update({
+    await db.course.update({
       where: { id: courseId },
       data: {
         totalLessons: result._count,

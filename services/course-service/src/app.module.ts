@@ -4,6 +4,7 @@ import Joi from 'joi';
 import { appConfig, databaseConfig, jwtConfig, rabbitmqConfig } from '@lms/shared-config';
 import { PrismaModule } from './prisma/prisma.module';
 import { MessagingModule } from './messaging/messaging.module';
+import { OutboxModule } from './outbox/outbox.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { CourseModule } from './course/course.module';
@@ -30,6 +31,7 @@ import { SkillModule } from './skill/skill.module';
 
     PrismaModule,
     MessagingModule,
+    OutboxModule,
     HealthModule,
     AuthModule,
     CourseModule,

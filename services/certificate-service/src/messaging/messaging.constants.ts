@@ -1,7 +1,9 @@
+import { EventTypes } from '@lms/shared-types';
+
 export const CERT_RABBITMQ_CLIENT = 'CERT_RABBITMQ_CLIENT';
 
 export const ROUTING_KEYS = {
-  ENROLLMENT_COMPLETED: 'enrollment.completed',
-  CERTIFICATE_ISSUED: 'certificate.issued',
-  CERTIFICATE_REVOKED: 'certificate.revoked',
+  ENROLLMENT_COMPLETED: EventTypes.ENROLLMENT_COMPLETED,
+  CERTIFICATE_ISSUED: EventTypes.CERTIFICATE_ISSUED,
+  CERTIFICATE_REVOKED: EventTypes.CERTIFICATE_REVOKED,
 } as const;

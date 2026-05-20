@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssignmentService } from '../assignment/assignment.service';
+import { EventTypes } from '@lms/shared-types';
 import { MessagingService } from '../messaging/messaging.service';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 
@@ -66,7 +67,7 @@ export class SubmissionService {
       include: { grade: true },
     });
 
-    this.messaging.publishEvent('assignment.submission.submitted', {
+    this.messaging.publishEvent(EventTypes.ASSIGNMENT_SUBMISSION_SUBMITTED, {
       assignmentId,
       submissionId: updated.id,
       studentId,

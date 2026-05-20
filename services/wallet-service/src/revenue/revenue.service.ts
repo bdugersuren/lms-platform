@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
-import { MessagingService } from '../messaging/messaging.service';
+import { OutboxService } from '../outbox/outbox.service';
 
 const PLATFORM_FEE_PERCENT = new Decimal('20'); // 20% platform fee
 
@@ -11,7 +13,7 @@ export class RevenueService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
-    private readonly messaging: MessagingService,
+    private readonly outbox: OutboxService,
   ) {}
 
   /**
@@ -64,13 +66,23 @@ export class RevenueService {
         },
       });
 
-      this.messaging.publishEvent('wallet.revenue.distributed', {
-        instructorId,
-        courseId,
-        enrollmentId,
-        grossAmount,
-        platformFee: platformFee.toNumber(),
-        netAmount: netAmount.toNumber(),
+      await this.outbox.enqueue(tx, {
+        eventId: randomUUID(),
+        eventType: EventTypes.WALLET_REVENUE_DISTRIBUTED,
+        eventVersion: 1,
+        occurredAt: new Date().toISOString(),
+        producer: 'wallet-service',
+        aggregateType: 'revenue-share',
+        aggregateId: share.id,
+        sequence: 1,
+        payload: {
+          instructorId,
+          courseId,
+          enrollmentId,
+          grossAmount,
+          platformFee: platformFee.toNumber(),
+          netAmount: netAmount.toNumber(),
+        },
       });
 
       return share;

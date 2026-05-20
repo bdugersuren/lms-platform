@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -25,6 +26,10 @@ interface JwtUser {
   sub: string;
   email: string;
   role: string;
+}
+
+function isAdminRole(role: string): boolean {
+  return role === 'ADMIN' || role === 'SUPER_ADMIN' || role === 'INSTRUCTOR';
 }
 
 @ApiTags('Enrollments')
@@ -87,5 +92,38 @@ export class EnrollmentController {
   ) {
     await this.enrollmentService.unenroll(id, user.sub);
     return ApiResponseBuilder.success(null, 'Unenrolled successfully');
+  }
+
+  // ─── Course-adjacent compat routes (gateway cutover targets) ─────────────
+
+  @Post('by-course/:courseId')
+  @ApiOperation({ summary: 'Enroll in a course by course ID (path param)' })
+  async enrollByCourse(
+    @CurrentUser() user: JwtUser,
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+  ) {
+    const data = await this.enrollmentService.enrollByCourse(courseId, user.sub);
+    return ApiResponseBuilder.success(data, 'Enrolled successfully');
+  }
+
+  @Delete('by-course/:courseId')
+  @ApiOperation({ summary: 'Unenroll from a course by course ID (path param)' })
+  async unenrollByCourse(
+    @CurrentUser() user: JwtUser,
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+  ) {
+    await this.enrollmentService.unenrollByCourse(courseId, user.sub);
+    return ApiResponseBuilder.success(null, 'Unenrolled successfully');
+  }
+
+  @Get('admin/course/:courseId')
+  @ApiOperation({ summary: 'List all enrollments for a course (instructor/admin only)' })
+  async listByCourse(
+    @CurrentUser() user: JwtUser,
+    @Param('courseId', ParseUUIDPipe) courseId: string,
+  ) {
+    if (!isAdminRole(user.role)) throw new ForbiddenException('Admin or instructor access required');
+    const data = await this.enrollmentService.listEnrollmentsForCourse(courseId);
+    return ApiResponseBuilder.success(data);
   }
 }

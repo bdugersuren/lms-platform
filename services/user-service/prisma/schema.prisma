@@ -1,0 +1,35 @@
+// User Service — Prisma Schema
+// Database: user_db
+// Each service owns its own schema. Never share across services.
+//
+// UserProfile.id is the same UUID as auth_db.users.id.
+// It is NOT a foreign key — it is event-sourced from auth.user.registered.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model UserProfile {
+  id            String   @id
+  tenantId      String?  @map("tenant_id")
+  displayName   String   @map("display_name")
+  firstName     String?  @map("first_name")
+  lastName      String?  @map("last_name")
+  avatarUrl     String?  @map("avatar_url")
+  bio           String?
+  headline      String?  @db.VarChar(160)
+  expertise     String[]
+  learningGoals String[] @map("learning_goals")
+  locale        String   @default("mn")
+  timezone      String   @default("Asia/Ulaanbaatar")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("user_profiles")
+}

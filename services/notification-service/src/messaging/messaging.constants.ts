@@ -1,11 +1,12 @@
+import { AuthEventPatterns, EventTypes } from '@lms/shared-types';
+
 export const NOTIFICATION_RABBITMQ_CLIENT = 'NOTIFICATION_RABBITMQ_CLIENT';
 
-// Routing keys this service listens to
 export const ROUTING_KEYS = {
-  AUTH_REGISTERED: 'auth.user.registered',
-  ASSIGNMENT_GRADED: 'assignment.submission.graded',
-  QUIZ_COMPLETED: 'quiz.attempt.completed',
-  COURSE_ENROLLED: 'enrollment.created',
-  PAYMENT_CONFIRMED: 'payment.confirmed',
-  PAYMENT_FAILED: 'payment.failed',
+  AUTH_REGISTERED: AuthEventPatterns.USER_REGISTERED,
+  ASSIGNMENT_GRADED: EventTypes.ASSIGNMENT_SUBMISSION_GRADED,
+  QUIZ_COMPLETED: EventTypes.QUIZ_ATTEMPT_SUBMITTED,
+  COURSE_ENROLLED: EventTypes.ENROLLMENT_CREATED,
+  PAYMENT_CONFIRMED: EventTypes.PAYMENT_CONFIRMED,
+  PAYMENT_FAILED: EventTypes.PAYMENT_FAILED,
 } as const;

@@ -87,6 +87,16 @@ x-nestjs-env: &nestjs-env
   NODE_OPTIONS: --max-old-space-size=150
   NODE_ENV: ${NODE_ENV:-development}
 
+# Shared MinIO connection vars — used by media-service and certificate-service.
+# MINIO_BUCKET is intentionally NOT here because each service uses a different bucket.
+x-minio-env: &minio-env
+  MINIO_ENDPOINT:   ${MINIO_ENDPOINT:-minio}
+  MINIO_PORT:       ${MINIO_PORT:-9000}
+  MINIO_USE_SSL:    ${MINIO_USE_SSL:-false}
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+  MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+
 # ── Networks ─────────────────────────────────────────────────────────────────
 networks:
   lms-net:
@@ -290,6 +300,25 @@ services:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3001/api/health"]
       <<: *nestjs-healthcheck
 
+  user-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/user-service/Dockerfile
+    container_name: lms-user-service
+    <<: *nestjs-common
+    profiles: [core]
+    environment:
+      <<: *nestjs-env
+      PORT: ${USER_PORT:-3014}
+      DATABASE_URL: ${USER_DATABASE_URL}
+    ports:
+      - "127.0.0.1:3014:3014"
+    depends_on:
+      <<: *infra-depends
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3014/api/health"]
+      <<: *nestjs-healthcheck
+
   course-service:
     build:
       <<: *nestjs-build
@@ -301,6 +330,8 @@ services:
       <<: *nestjs-env
       PORT: ${COURSE_PORT:-3003}
       DATABASE_URL: ${COURSE_DATABASE_URL}
+      # Set to 'true' to disable legacy enrollment/progress writes (Phase 5/6 cutover)
+      ENROLLMENT_CUTOVER_ENABLED: ${ENROLLMENT_CUTOVER_ENABLED:-false}
     ports:
       - "127.0.0.1:3003:3003"
     depends_on:
@@ -455,16 +486,10 @@ services:
     <<: *heavy-common
     profiles: [ops]
     environment:
-      <<: *nestjs-env
+      <<: [*nestjs-env, *minio-env]
       PORT: ${MEDIA_PORT:-3011}
       DATABASE_URL: ${MEDIA_DATABASE_URL}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
-      MINIO_PORT: ${MINIO_PORT:-9000}
-      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-lms-media}
-      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
       UPLOAD_MAX_SIZE_MB: ${UPLOAD_MAX_SIZE_MB:-500}
       PRESIGN_EXPIRES_SECONDS: ${PRESIGN_EXPIRES_SECONDS:-7200}
     ports:
@@ -485,16 +510,10 @@ services:
     <<: *nestjs-common
     profiles: [ops]
     environment:
-      <<: *nestjs-env
+      <<: [*nestjs-env, *minio-env]
       PORT: ${CERTIFICATE_PORT:-3012}
       DATABASE_URL: ${CERTIFICATE_DATABASE_URL}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
-      MINIO_PORT: ${MINIO_PORT:-9000}
-      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${CERTIFICATE_BUCKET:-lms-certificates}
-      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost}
     ports:
       - "127.0.0.1:3012:3012"
@@ -588,9 +607,8 @@ services:
       <<: *nestjs-build
       dockerfile: services/ai-service/Dockerfile
     container_name: lms-ai-service
-    <<: [*restart, *networks]
+    <<: *nestjs-common
     profiles: [ai]
-    env_file: .env
     environment:
       <<: *nestjs-env
       PORT: ${AI_PORT:-3009}

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { MediaStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MinioService } from '../minio/minio.service';
+import { EventTypes } from '@lms/shared-types';
 import { MessagingService } from '../messaging/messaging.service';
 import { UpdateMediaDto } from './dto/update-media.dto';
 import { QueryMediaDto } from './dto/query-media.dto';
@@ -57,7 +58,7 @@ export class MediaService {
       },
     });
 
-    this.messaging.emit('media.file.uploaded', {
+    this.messaging.emit(EventTypes.MEDIA_FILE_UPLOADED, {
       mediaFileId: record.id,
       userId,
       mediaType,
@@ -137,7 +138,7 @@ export class MediaService {
       where: { id },
       data: { status: MediaStatus.DELETED },
     });
-    this.messaging.emit('media.file.deleted', { mediaFileId: id, userId });
+    this.messaging.emit(EventTypes.MEDIA_FILE_DELETED, { mediaFileId: id, userId });
   }
 
   // ─── Presign ──────────────────────────────────────────────────────────────

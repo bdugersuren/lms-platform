@@ -34,6 +34,7 @@
     "@nestjs/platform-express": "catalog:",
     "@nestjs/swagger": "catalog:",
     "@nestjs/terminus": "catalog:",
+    "swagger-ui-express": "catalog:",
     "@prisma/client": "catalog:",
     "prisma": "catalog:",
     "amqp-connection-manager": "catalog:",

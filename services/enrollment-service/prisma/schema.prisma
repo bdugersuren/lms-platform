@@ -46,9 +46,191 @@ model LessonProgress {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  enrollment      Enrollment                @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  blockProgresses InteractiveBlockProgress[]
 
   @@unique([enrollmentId, lessonId])
   @@index([enrollmentId])
   @@map("lesson_progresses")
+}
+
+model InteractiveBlockProgress {
+  id                 String    @id @default(uuid())
+  lessonProgressId   String    @map("lesson_progress_id")
+  interactiveBlockId String    @map("interactive_block_id")
+  score              Float     @default(0)
+  passed             Boolean   @default(false)
+  completed          Boolean   @default(false)
+  attempts           Int       @default(0)
+  startedAt          DateTime  @default(now()) @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+
+  lessonProgress LessonProgress    @relation(fields: [lessonProgressId], references: [id], onDelete: Cascade)
+  answers        InteractiveAnswer[]
+
+  @@unique([lessonProgressId, interactiveBlockId])
+  @@index([lessonProgressId])
+  @@map("interactive_block_progresses")
+}
+
+model InteractiveAnswer {
+  id                         String    @id @default(uuid())
+  interactiveBlockProgressId String    @map("interactive_block_progress_id")
+  questionId                 String    @map("question_id")
+  answerText                 String?   @map("answer_text")
+  selectedOptionIds          Json?     @map("selected_option_ids")
+  isCorrect                  Boolean?  @map("is_correct")
+  scoreAwarded               Float     @default(0) @map("score_awarded")
+  answeredAt                 DateTime  @default(now()) @map("answered_at")
+
+  interactiveBlockProgress InteractiveBlockProgress @relation(fields: [interactiveBlockProgressId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@index([interactiveBlockProgressId])
+  @@map("interactive_answers")
+}
+
+model EnrollmentAlias {
+  id                  String   @id @default(uuid())
+  enrollmentServiceId String   @unique @map("enrollment_service_id")
+  courseServiceId     String   @unique @map("course_service_id")
+  migratedAt          DateTime @default(now()) @map("migrated_at")
+
+  @@map("enrollment_aliases")
+}
+
+model MigrationRun {
+  id           String    @id @default(uuid())
+  runType      String    @map("run_type")
+  status       String    @default("running")
+  totalRows    Int       @default(0) @map("total_rows")
+  migratedRows Int       @default(0) @map("migrated_rows")
+  skippedRows  Int       @default(0) @map("skipped_rows")
+  errorRows    Int       @default(0) @map("error_rows")
+  startedAt    DateTime  @default(now()) @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  errorDetail  String?   @map("error_detail")
+  checksum     String?
+
+  @@index([runType, status])
+  @@map("migration_runs")
+}
+
+model CourseProjection {
+  courseId       String    @id @map("course_id")
+  title          String
+  slug           String
+  instructorId   String    @map("instructor_id")
+  price          Decimal   @default(0) @db.Decimal(10, 2)
+  status         String
+  isSequential   Boolean   @default(true) @map("is_sequential")
+  totalLessons   Int       @default(0) @map("total_lessons")
+  totalMinutes   Int       @default(0) @map("total_minutes")
+  contentVersion Int       @default(1) @map("content_version")
+  publishedAt    DateTime? @map("published_at")
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  modules ModuleProjection[]
+  lessons LessonProjection[]
+
+  @@index([status])
+  @@index([instructorId])
+  @@map("course_projections")
+}
+
+model ModuleProjection {
+  moduleId       String    @id @map("module_id")
+  courseId       String    @map("course_id")
+  title          String
+  sortOrder      Int       @default(0) @map("sort_order")
+  contentVersion Int       @default(1) @map("content_version")
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  course  CourseProjection @relation(fields: [courseId], references: [courseId], onDelete: Cascade)
+  lessons LessonProjection[]
+
+  @@index([courseId])
+  @@index([courseId, sortOrder])
+  @@map("module_projections")
+}
+
+model LessonProjection {
+  lessonId         String    @id @map("lesson_id")
+  courseId         String    @map("course_id")
+  moduleId         String    @map("module_id")
+  title            String
+  lessonType       String    @map("lesson_type")
+  sortOrder        Int       @default(0) @map("sort_order")
+  passingScore     Float     @default(60) @map("passing_score")
+  unlockNextOnPass Boolean   @default(true) @map("unlock_next_on_pass")
+  contentVersion   Int       @default(1) @map("content_version")
+  deletedAt        DateTime? @map("deleted_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  course CourseProjection @relation(fields: [courseId], references: [courseId], onDelete: Cascade)
+  module ModuleProjection @relation(fields: [moduleId], references: [moduleId], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([moduleId])
+  @@index([courseId, sortOrder])
+  @@map("lesson_projections")
+}
+
+model EventInbox {
+  id             String    @id @default(uuid())
+  eventId        String    @unique @map("event_id")
+  eventType      String    @map("event_type")
+  aggregateType  String    @map("aggregate_type")
+  aggregateId    String    @map("aggregate_id")
+  contentVersion Int?      @map("content_version")
+  payloadHash    String?   @map("payload_hash")
+  processedAt    DateTime? @map("processed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@index([aggregateType, aggregateId])
+  @@index([processedAt])
+  @@map("event_inbox")
+}
+
+model EventOutbox {
+  id            String    @id @default(uuid())
+  eventId       String    @unique @map("event_id")
+  eventType     String    @map("event_type")
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id")
+  payload       Json
+  occurredAt    DateTime  @default(now()) @map("occurred_at")
+  publishedAt   DateTime? @map("published_at")
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([eventType])
+  @@index([aggregateType, aggregateId])
+  @@index([publishedAt, occurredAt])
+  @@map("event_outbox")
+}
+
+model EventFailure {
+  id         String    @id @default(uuid())
+  eventId    String?   @map("event_id")
+  eventType  String    @map("event_type")
+  consumer   String
+  payload    Json
+  errorMsg   String    @map("error_msg")
+  stackTrace String?   @map("stack_trace")
+  retryCount Int       @default(0) @map("retry_count")
+  resolvedAt DateTime? @map("resolved_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@index([resolvedAt])
+  @@map("event_failures")
 }

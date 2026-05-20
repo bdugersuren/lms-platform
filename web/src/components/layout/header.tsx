@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useTenant } from '@/lib/tenant-context';
 import { useAuthStore } from '@/store/auth.store';
 import { useLocale } from '@/hooks/use-locale';
+import { useMe } from '@/hooks/use-auth';
+import { useMyProfile } from '@/hooks/use-profile';
+import { Avatar } from '@/components/user/avatar';
+import { isAdmin } from '@/lib/rbac';
 import type { NavItem } from '@/types/tenant';
 import clsx from 'clsx';
 
@@ -37,12 +41,36 @@ function NavLink({ item, locale, onClick }: { item: NavItem; locale: string; onC
   );
 }
 
+const ADMIN_LINKS = [
+  { href: '/admin', label: 'Хяналтын самбар', labelEn: 'Overview' },
+  { href: '/admin/users', label: 'Хэрэглэгчид', labelEn: 'Users' },
+  { href: '/admin/settings', label: 'Тохиргоо', labelEn: 'Settings' },
+  { href: '/admin/features', label: 'Функц тохиргоо', labelEn: 'Features' },
+];
+
 export function Header() {
   const tenant = useTenant();
   const { locale, toggleLocale, t } = useLocale();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { data: me } = useMe();
+  const { data: profile } = useMyProfile();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const adminRef = useRef<HTMLDivElement>(null);
+
+  const showAdmin = !!me && isAdmin(me.role);
+
+  useEffect(() => {
+    if (!adminOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (adminRef.current && !adminRef.current.contains(e.target as Node)) {
+        setAdminOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [adminOpen]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -106,13 +134,61 @@ export function Header() {
             )}
 
             {isAuthenticated ? (
-              <Link
-                href="/dashboard"
-                className="hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold text-white px-4 py-2 rounded-lg transition-all"
-                style={{ background: `rgb(var(--color-primary))` }}
-              >
-                {t('Dashboard', 'Хяналтын самбар')}
-              </Link>
+              <>
+                <Link
+                  href="/dashboard"
+                  className="hidden sm:inline-flex text-sm font-medium text-gray-600 hover:text-primary transition-colors"
+                >
+                  {t('Dashboard', 'Хяналтын самбар')}
+                </Link>
+
+                {/* Admin dropdown — ADMIN/SUPER_ADMIN only */}
+                {showAdmin && (
+                  <div ref={adminRef} className="relative hidden sm:block">
+                    <button
+                      onClick={() => setAdminOpen((v) => !v)}
+                      className="flex items-center gap-1 text-sm font-medium text-gray-600 hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-gray-100"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      {t('Admin', 'Админ')}
+                      <svg className={clsx('w-3 h-3 transition-transform', adminOpen && 'rotate-180')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {adminOpen && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+                        {ADMIN_LINKS.map((link) => (
+                          <Link
+                            key={link.href}
+                            href={link.href}
+                            onClick={() => setAdminOpen(false)}
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
+                          >
+                            {locale === 'mn' ? link.label : link.labelEn}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <Link
+                  href="/settings/profile"
+                  className="hidden sm:inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <Avatar
+                    avatarUrl={profile?.avatarUrl}
+                    displayName={profile?.displayName ?? ''}
+                    size="sm"
+                  />
+                  {profile?.displayName && (
+                    <span className="max-w-[120px] truncate">{profile.displayName}</span>
+                  )}
+                </Link>
+              </>
             ) : (
               <>
                 <Link
@@ -155,6 +231,26 @@ export function Header() {
               />
             ))}
             <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
+              {isAuthenticated && (
+                <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="text-sm text-gray-700 font-medium">
+                  {t('Dashboard', 'Хяналтын самбар')}
+                </Link>
+              )}
+              {showAdmin && (
+                <>
+                  <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mt-1">Admin</p>
+                  {ADMIN_LINKS.map((link) => (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setMobileOpen(false)}
+                      className="text-sm text-gray-700 pl-2"
+                    >
+                      {locale === 'mn' ? link.label : link.labelEn}
+                    </Link>
+                  ))}
+                </>
+              )}
               {tenant.locale === 'both' && (
                 <button
                   onClick={() => { toggleLocale(); setMobileOpen(false); }}

@@ -1,0 +1,28 @@
+export const EventTypes = {
+  // Enrollment
+  ENROLLMENT_CREATED:              'enrollment.created',
+  ENROLLMENT_COMPLETED:            'enrollment.completed',
+  LESSON_COMPLETED:                'lesson.completed',
+  // Payment
+  PAYMENT_CONFIRMED:               'payment.confirmed',
+  PAYMENT_FAILED:                  'payment.failed',
+  // Certificate
+  CERTIFICATE_ISSUED:              'certificate.issued',
+  CERTIFICATE_REVOKED:             'certificate.revoked',
+  // Quiz — canonical name is 'quiz.attempt.submitted' (quiz-service producer)
+  QUIZ_ATTEMPT_SUBMITTED:          'quiz.attempt.submitted',
+  // Assignment
+  ASSIGNMENT_SUBMISSION_GRADED:    'assignment.submission.graded',
+  ASSIGNMENT_SUBMISSION_SUBMITTED: 'assignment.submission.submitted',
+  // Wallet
+  WALLET_REVENUE_DISTRIBUTED:      'wallet.revenue.distributed',
+  WALLET_PAYOUT_REQUESTED:         'wallet.payout.requested',
+  // Course
+  COURSE_STUDENT_ENROLLED:         'course.student.enrolled',
+  // Media
+  MEDIA_FILE_UPLOADED:             'media.file.uploaded',
+  MEDIA_FILE_DELETED:              'media.file.deleted',
+  MEDIA_TRANSCODE_QUEUED:          'media.transcode.queued',
+} as const;
+
+export type EventType = (typeof EventTypes)[keyof typeof EventTypes];

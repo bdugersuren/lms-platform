@@ -1,42 +1,39 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
+import {
+  CourseContentEventEnvelope,
+  CourseContentEventPatterns,
+  EnrollmentCreatedPayload,
+  EventTypes,
+} from '@lms/shared-types';
 import { RevenueService } from '../revenue/revenue.service';
-
-interface EnrollmentCreatedEvent {
-  enrollmentId: string;
-  courseId: string;
-  studentId: string;
-}
+import { EventFailureService } from '../event-failure/event-failure.service';
+import { CourseProjectionService } from '../course-projection/course-projection.service';
 
 @Controller()
 export class EventListenerService {
   private readonly logger = new Logger(EventListenerService.name);
-  private readonly courseServiceUrl: string;
 
   constructor(
     private readonly revenue: RevenueService,
-    private readonly http: HttpService,
-    private readonly config: ConfigService,
-  ) {
-    this.courseServiceUrl = this.config.get<string>('COURSE_SERVICE_URL', 'http://course-service:3003');
-  }
+    private readonly eventFailure: EventFailureService,
+    private readonly courseProjection: CourseProjectionService,
+  ) {}
 
-  @EventPattern('enrollment.created')
-  async onEnrollmentCreated(@Payload() event: EnrollmentCreatedEvent): Promise<void> {
+  @EventPattern(EventTypes.ENROLLMENT_CREATED)
+  async onEnrollmentCreated(@Payload() event: EnrollmentCreatedPayload): Promise<void> {
     this.logger.log(
       `Enrollment created — distributing revenue for enrollmentId=${event.enrollmentId} courseId=${event.courseId}`,
     );
     try {
-      const resp = await firstValueFrom(
-        this.http.get<{ data: { id: string; instructorId: string; price: string } }>(
-          `${this.courseServiceUrl}/api/courses/${event.courseId}`,
-        ),
-      );
-      const course = resp.data.data;
-      const grossAmount = parseFloat(course.price ?? '0');
+      const course = await this.courseProjection.findCourse(event.courseId);
+
+      if (!course) {
+        this.logger.warn(`CourseProjection not found for courseId=${event.courseId} — skipping revenue`);
+        return;
+      }
+
+      const grossAmount = parseFloat(course.price.toString());
 
       if (grossAmount <= 0) {
         this.logger.debug(`Course ${event.courseId} is free — skipping revenue distribution`);
@@ -54,8 +51,25 @@ export class EventListenerService {
         `Revenue distributed for enrollmentId=${event.enrollmentId} instructorId=${course.instructorId}`,
       );
     } catch (err) {
-      // Swallow to ack the message and avoid requeue loop
       this.logger.error(`Revenue distribution failed for enrollmentId=${event.enrollmentId}`, err);
+      await this.eventFailure.record({
+        eventType: EventTypes.ENROLLMENT_CREATED,
+        consumer: 'wallet-service',
+        payload: event,
+        error: err,
+        eventId: event.enrollmentId,
+      });
+      throw err;
     }
+  }
+
+  @EventPattern(CourseContentEventPatterns.PUBLISHED)
+  async onCoursePublished(@Payload() envelope: CourseContentEventEnvelope): Promise<void> {
+    await this.courseProjection.handleCourseEvent(envelope);
+  }
+
+  @EventPattern(CourseContentEventPatterns.UPDATED)
+  async onCourseUpdated(@Payload() envelope: CourseContentEventEnvelope): Promise<void> {
+    await this.courseProjection.handleCourseEvent(envelope);
   }
 }

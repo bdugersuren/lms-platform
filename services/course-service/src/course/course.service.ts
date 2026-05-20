@@ -10,6 +10,7 @@ import { JwtPayload, UserRole } from '@lms/shared-types';
 import { CourseEventPatterns } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
+import { CourseEventsPublisher } from './course-events.publisher';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { CourseQueryDto } from './dto/course-query.dto';
@@ -19,6 +20,7 @@ export class CourseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messaging: MessagingService,
+    private readonly courseEvents: CourseEventsPublisher,
   ) {}
 
   async create(dto: CreateCourseDto, user: JwtPayload) {
@@ -40,7 +42,7 @@ export class CourseService {
       },
     });
 
-    this.messaging.publishEvent(CourseEventPatterns.CREATED, {
+    void this.messaging.publishEvent(CourseEventPatterns.CREATED, {
       courseId: course.id,
       title: course.title,
       slug: course.slug,
@@ -181,7 +183,29 @@ export class CourseService {
     if (dto.isSequential !== undefined) data.isSequential = dto.isSequential;
     if (dto.passingScore !== undefined) data.passingScore = dto.passingScore;
 
-    const updated = await this.prisma.course.update({ where: { id }, data });
+    const changedFields = Object.entries(dto)
+      .filter(([, value]) => value !== undefined)
+      .map(([field]) => field);
+
+    if (changedFields.length === 0) {
+      return ApiResponseBuilder.success(course, 'Course updated');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.course.update({
+        where: { id },
+        data: { ...data, contentVersion: { increment: 1 } },
+      });
+      await this.courseEvents.enqueueCourseUpdated(
+        tx,
+        id,
+        result.contentVersion,
+        changedFields,
+      );
+      return result;
+    });
+
+    await this.courseEvents.publishPending();
 
     return ApiResponseBuilder.success(updated, 'Course updated');
   }
@@ -192,12 +216,22 @@ export class CourseService {
 
     this.assertOwnerOrAdmin(course.instructorId, user);
 
-    const updated = await this.prisma.course.update({
-      where: { id },
-      data: { status: CourseStatus.PUBLISHED, publishedAt: new Date() },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.course.update({
+        where: { id },
+        data: {
+          status: CourseStatus.PUBLISHED,
+          publishedAt: new Date(),
+          contentVersion: { increment: 1 },
+        },
+      });
+      await this.courseEvents.enqueuePublished(tx, id, result.contentVersion);
+      return result;
     });
 
-    this.messaging.publishEvent(CourseEventPatterns.PUBLISHED, {
+    await this.courseEvents.publishPending();
+
+    void this.messaging.publishEvent(CourseEventPatterns.PUBLISHED, {
       courseId: course.id,
       title: course.title,
       instructorId: course.instructorId,
@@ -212,12 +246,23 @@ export class CourseService {
 
     this.assertOwnerOrAdmin(course.instructorId, user);
 
-    const updated = await this.prisma.course.update({
-      where: { id },
-      data: { status: CourseStatus.ARCHIVED },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.course.update({
+        where: { id },
+        data: {
+          status: CourseStatus.ARCHIVED,
+          contentVersion: { increment: 1 },
+        },
+      });
+      await this.courseEvents.enqueueCourseUpdated(tx, id, result.contentVersion, [
+        'status',
+      ]);
+      return result;
     });
 
-    this.messaging.publishEvent(CourseEventPatterns.ARCHIVED, {
+    await this.courseEvents.publishPending();
+
+    void this.messaging.publishEvent(CourseEventPatterns.ARCHIVED, {
       courseId: course.id,
       instructorId: course.instructorId,
     });

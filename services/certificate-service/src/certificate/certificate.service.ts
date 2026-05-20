@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { CertificateStatus } from '@prisma/client';
+import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
-import { MessagingService } from '../messaging/messaging.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { GeneratorService } from '../generator/generator.service';
 import { CreateCertificateDto } from './dto/create-certificate.dto';
 import { QueryCertificateDto } from './dto/query-certificate.dto';
-import { ROUTING_KEYS } from '../messaging/messaging.constants';
 
 @Injectable()
 export class CertificateService {
@@ -13,7 +14,7 @@ export class CertificateService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly messaging: MessagingService,
+    private readonly outbox: OutboxService,
     private readonly generator: GeneratorService,
   ) {}
 
@@ -27,18 +28,39 @@ export class CertificateService {
       if (existing) return existing;
     }
 
-    const cert = await this.prisma.certificate.create({
-      data: {
-        userId,
-        courseId,
-        title,
-        recipientName,
-        description,
-        issuerName: issuerName ?? 'LMS Platform',
-        completedAt: new Date(completedAt),
-        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-        status: CertificateStatus.ISSUED,
-      },
+    const cert = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.certificate.create({
+        data: {
+          userId,
+          courseId,
+          title,
+          recipientName,
+          description,
+          issuerName: issuerName ?? 'LMS Platform',
+          completedAt: new Date(completedAt),
+          expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+          status: CertificateStatus.ISSUED,
+        },
+      });
+
+      await this.outbox.enqueue(tx, {
+        eventId: randomUUID(),
+        eventType: EventTypes.CERTIFICATE_ISSUED,
+        eventVersion: 1,
+        occurredAt: new Date().toISOString(),
+        producer: 'certificate-service',
+        aggregateType: 'certificate',
+        aggregateId: created.id,
+        sequence: 1,
+        payload: {
+          certificateId: created.id,
+          userId,
+          courseId,
+          verifyCode: created.verifyCode,
+        },
+      });
+
+      return created;
     });
 
     // Generate QR code asynchronously — update record after
@@ -48,13 +70,6 @@ export class CertificateService {
         this.prisma.certificate.update({ where: { id: cert.id }, data: { qrCodeUrl } }),
       )
       .catch((err) => this.logger.warn(`QR generation failed for ${cert.id}`, err));
-
-    this.messaging.emit(ROUTING_KEYS.CERTIFICATE_ISSUED, {
-      certificateId: cert.id,
-      userId,
-      courseId,
-      verifyCode: cert.verifyCode,
-    });
 
     this.logger.log(`Certificate issued: ${cert.id} for user ${userId}`);
     return cert;
@@ -102,11 +117,28 @@ export class CertificateService {
   async revoke(id: string) {
     const cert = await this.prisma.certificate.findUnique({ where: { id } });
     if (!cert) throw new NotFoundException('Certificate not found');
-    const updated = await this.prisma.certificate.update({
-      where: { id },
-      data: { status: CertificateStatus.REVOKED },
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const revoked = await tx.certificate.update({
+        where: { id },
+        data: { status: CertificateStatus.REVOKED },
+      });
+
+      await this.outbox.enqueue(tx, {
+        eventId: randomUUID(),
+        eventType: EventTypes.CERTIFICATE_REVOKED,
+        eventVersion: 1,
+        occurredAt: new Date().toISOString(),
+        producer: 'certificate-service',
+        aggregateType: 'certificate',
+        aggregateId: id,
+        sequence: 1,
+        payload: { certificateId: id, userId: cert.userId },
+      });
+
+      return revoked;
     });
-    this.messaging.emit(ROUTING_KEYS.CERTIFICATE_REVOKED, { certificateId: id, userId: cert.userId });
+
     this.logger.log(`Certificate revoked: ${id}`);
     return updated;
   }

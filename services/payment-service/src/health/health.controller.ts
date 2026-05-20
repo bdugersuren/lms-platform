@@ -25,6 +25,13 @@ export class HealthController {
           return { database: { status: 'down' as const } };
         }
       },
+      async () => {
+        const [outboxPending, failureCount] = await Promise.all([
+          this.prisma.eventOutbox.count({ where: { publishedAt: null } }),
+          this.prisma.eventFailure.count({ where: { resolvedAt: null } }),
+        ]);
+        return { events: { status: 'up' as const, outboxPending, failureCount } };
+      },
       () => this.memory.checkHeap('memory_heap', 500 * 1024 * 1024),
     ]);
   }

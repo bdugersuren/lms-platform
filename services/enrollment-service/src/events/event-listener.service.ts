@@ -1,32 +1,84 @@
 import { Controller, Logger } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
+import {
+  CourseContentEventEnvelope,
+  CourseContentEventPatterns,
+  EventTypes,
+  PaymentConfirmedPayload,
+} from '@lms/shared-types';
 import { EnrollmentService } from '../enrollment/enrollment.service';
-
-interface PaymentConfirmedEvent {
-  paymentId: string;
-  userId: string;
-  courseId: string;
-  amount: string;
-  currency: string;
-  provider: string;
-}
+import { CourseProjectionService } from '../course-projection/course-projection.service';
+import { EventFailureService } from '../event-failure/event-failure.service';
 
 @Controller()
 export class EventListenerService {
   private readonly logger = new Logger(EventListenerService.name);
 
-  constructor(private readonly enrollmentService: EnrollmentService) {}
+  constructor(
+    private readonly enrollmentService: EnrollmentService,
+    private readonly courseProjection: CourseProjectionService,
+    private readonly eventFailure: EventFailureService,
+  ) {}
 
-  @EventPattern('payment.confirmed')
-  async onPaymentConfirmed(@Payload() event: PaymentConfirmedEvent): Promise<void> {
+  @EventPattern(EventTypes.PAYMENT_CONFIRMED)
+  async onPaymentConfirmed(@Payload() event: PaymentConfirmedPayload): Promise<void> {
     this.logger.log(
       `Payment confirmed — auto-enrolling userId=${event.userId} courseId=${event.courseId} paymentId=${event.paymentId}`,
     );
     try {
       await this.enrollmentService.enrollFromPayment(event.userId, event.courseId, event.paymentId);
     } catch (err) {
-      // Swallow error to ack the message — prevents infinite nack/requeue loop
       this.logger.error(`Auto-enrollment failed for paymentId=${event.paymentId}`, err);
+      await this.eventFailure.record({
+        eventType: EventTypes.PAYMENT_CONFIRMED,
+        consumer: 'enrollment-service',
+        payload: event,
+        error: err,
+        eventId: event.paymentId,
+      });
+      throw err;
     }
+  }
+
+  @EventPattern(CourseContentEventPatterns.PUBLISHED)
+  async onCoursePublished(
+    @Payload() event: CourseContentEventEnvelope,
+  ): Promise<void> {
+    await this.courseProjection.handleCourseEvent(event);
+  }
+
+  @EventPattern(CourseContentEventPatterns.UPDATED)
+  async onCourseUpdated(
+    @Payload() event: CourseContentEventEnvelope,
+  ): Promise<void> {
+    await this.courseProjection.handleCourseEvent(event);
+  }
+
+  @EventPattern(CourseContentEventPatterns.LESSON_CREATED)
+  async onLessonCreated(
+    @Payload() event: CourseContentEventEnvelope,
+  ): Promise<void> {
+    await this.courseProjection.handleCourseEvent(event);
+  }
+
+  @EventPattern(CourseContentEventPatterns.LESSON_UPDATED)
+  async onLessonUpdated(
+    @Payload() event: CourseContentEventEnvelope,
+  ): Promise<void> {
+    await this.courseProjection.handleCourseEvent(event);
+  }
+
+  @EventPattern(CourseContentEventPatterns.LESSON_DELETED)
+  async onLessonDeleted(
+    @Payload() event: CourseContentEventEnvelope,
+  ): Promise<void> {
+    await this.courseProjection.handleCourseEvent(event);
+  }
+
+  @EventPattern(CourseContentEventPatterns.LESSON_REORDERED)
+  async onLessonReordered(
+    @Payload() event: CourseContentEventEnvelope,
+  ): Promise<void> {
+    await this.courseProjection.handleCourseEvent(event);
   }
 }

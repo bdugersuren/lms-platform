@@ -8,6 +8,8 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { PaymentModule } from './payment/payment.module';
 import { WebhookModule } from './webhook/webhook.module';
+import { EventFailureModule } from './event-failure/event-failure.module';
+import { OutboxModule } from './outbox/outbox.module';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { WebhookModule } from './webhook/webhook.module';
     AuthModule,
     PaymentModule,
     WebhookModule,
+    EventFailureModule,
+    OutboxModule,
   ],
 })
 export class AppModule {}

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubmissionService } from '../submission/submission.service';
+import { EventTypes } from '@lms/shared-types';
 import { MessagingService } from '../messaging/messaging.service';
 import { CreateGradeDto } from './dto/create-grade.dto';
 
@@ -63,7 +64,7 @@ export class GradeService {
 
     const passed = dto.score >= assignment.passingScore;
 
-    this.messaging.publishEvent('assignment.submission.graded', {
+    this.messaging.publishEvent(EventTypes.ASSIGNMENT_SUBMISSION_GRADED, {
       submissionId,
       assignmentId: submission.assignmentId,
       studentId: submission.studentId,

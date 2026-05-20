@@ -5,11 +5,14 @@ import Joi from 'joi';
 import { appConfig, databaseConfig, jwtConfig, rabbitmqConfig } from '@lms/shared-config';
 import { PrismaModule } from './prisma/prisma.module';
 import { MessagingModule } from './messaging/messaging.module';
+import { OutboxModule } from './outbox/outbox.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { CourseClientModule } from './course-client/course-client.module';
 import { EnrollmentModule } from './enrollment/enrollment.module';
 import { EventListenerModule } from './events/events.module';
+import { AdminModule } from './admin/admin.module';
+import { EventFailureModule } from './event-failure/event-failure.module';
 
 @Module({
   imports: [
@@ -32,11 +35,14 @@ import { EventListenerModule } from './events/events.module';
 
     PrismaModule,
     MessagingModule,
+    OutboxModule,
     HealthModule,
     AuthModule,
     CourseClientModule,
     EnrollmentModule,
     EventListenerModule,
+    AdminModule,
+    EventFailureModule,
   ],
 })
 export class AppModule {}

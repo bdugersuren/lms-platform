@@ -4,13 +4,20 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMe, useLogout, useLogoutAll, useChangePassword } from '@/hooks/use-auth';
+import { useMyProfile, useProfileCompletion } from '@/hooks/use-profile';
 import { useAuthStore } from '@/store/auth.store';
+import { isAdmin } from '@/lib/rbac';
+import { Avatar } from '@/components/user/avatar';
+import { CompletionCard } from '@/components/profile/completion-card';
+import { track, AnalyticsEvents } from '@/lib/analytics';
 import { clsx } from 'clsx';
 
 export default function DashboardPage() {
   const router = useRouter();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { data: user, isLoading } = useMe();
+  const { data: profile } = useMyProfile();
+  const completion = useProfileCompletion(user);
   const logout = useLogout();
   const logoutAll = useLogoutAll();
   const changePassword = useChangePassword();
@@ -21,6 +28,16 @@ export default function DashboardPage() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(true);
+
+  useEffect(() => {
+    setBannerDismissed(!!sessionStorage.getItem('profile-banner-dismissed'));
+  }, []);
+
+  const dismissBanner = () => {
+    sessionStorage.setItem('profile-banner-dismissed', '1');
+    setBannerDismissed(true);
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -36,7 +53,7 @@ export default function DashboardPage() {
     setPasswordSuccess(false);
 
     if (newPassword !== confirmNewPassword) {
-      setPasswordError('New passwords do not match');
+      setPasswordError('Шинэ нууц үг таарахгүй байна');
       return;
     }
 
@@ -82,12 +99,14 @@ export default function DashboardPage() {
           {user && (
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center">
-                  <span className="text-indigo-700 font-semibold text-xs uppercase">
-                    {user.email[0]}
-                  </span>
-                </div>
-                <span className="text-sm text-gray-600 max-w-[180px] truncate">{user.email}</span>
+                <Avatar
+                  avatarUrl={profile?.avatarUrl}
+                  displayName={profile?.displayName ?? user.email}
+                  size="sm"
+                />
+                <span className="text-sm text-gray-600 max-w-[180px] truncate">
+                  {profile?.displayName ?? user.email}
+                </span>
               </div>
               <button
                 onClick={() => logout.mutate()}
@@ -104,7 +123,7 @@ export default function DashboardPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                   </svg>
                 )}
-                Sign out
+                Гарах
               </button>
             </div>
           )}
@@ -119,12 +138,28 @@ export default function DashboardPage() {
           </div>
         ) : user ? (
           <>
+            {/* Onboarding / profile completion card */}
+            {!bannerDismissed && completion && !completion.isComplete && (
+              <CompletionCard
+                completion={completion}
+                locale="mn"
+                onDismiss={() => {
+                  dismissBanner();
+                  track(AnalyticsEvents.ONBOARDING_BANNER_DISMISSED, {
+                    score: completion.score,
+                  });
+                }}
+              />
+            )}
+
             {/* Welcome banner */}
             <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-2xl p-6 text-white">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-indigo-200 text-sm font-medium">Welcome back 👋</p>
-                  <h1 className="text-xl font-bold mt-1 truncate max-w-sm">{user.email}</h1>
+                  <p className="text-indigo-200 text-sm font-medium">Тавтай морилно уу 👋</p>
+                  <h1 className="text-xl font-bold mt-1 truncate max-w-sm">
+                    {profile?.displayName ?? user.email}
+                  </h1>
                   <div className="mt-3">
                     <span
                       className={clsx(
@@ -136,9 +171,12 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 </div>
-                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl font-bold text-white uppercase">{user.email[0]}</span>
-                </div>
+                <Avatar
+                  avatarUrl={profile?.avatarUrl}
+                  displayName={profile?.displayName ?? user.email}
+                  size="md"
+                  className="opacity-90"
+                />
               </div>
             </div>
 
@@ -204,18 +242,46 @@ export default function DashboardPage() {
                   <p className="text-xs text-slate-400">QPay / SocialPay</p>
                 </div>
               </Link>
+              {isAdmin(user.role) && (
+                <Link
+                  href="/admin/users"
+                  className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-indigo-200 hover:shadow-md transition-all group"
+                >
+                  <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center group-hover:bg-red-100 transition-colors">
+                    <span className="text-xl">👥</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Хэрэглэгчид</p>
+                    <p className="text-xs text-slate-400">Удирдах</p>
+                  </div>
+                </Link>
+              )}
+              {user.role === 'STUDENT' && (
+                <Link
+                  href="/dashboard/progress"
+                  className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-indigo-200 hover:shadow-md transition-all group"
+                >
+                  <div className="w-10 h-10 bg-teal-50 rounded-lg flex items-center justify-center group-hover:bg-teal-100 transition-colors">
+                    <span className="text-xl">📊</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Миний явц</p>
+                    <p className="text-xs text-slate-400">Гэрчилгээ, дэвшил</p>
+                  </div>
+                </Link>
+              )}
               {(user.role === 'INSTRUCTOR' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && (
                 <>
                   <Link
-                    href="/courses/manage"
+                    href="/instructor/dashboard"
                     className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-indigo-200 hover:shadow-md transition-all group"
                   >
                     <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center group-hover:bg-slate-100 transition-colors">
                       <span className="text-xl">⚙️</span>
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-slate-800">Удирдах</p>
-                      <p className="text-xs text-slate-400">Курс засах</p>
+                      <p className="text-sm font-semibold text-slate-800">Багшийн самбар</p>
+                      <p className="text-xs text-slate-400">Орлого, сургалт</p>
                     </div>
                   </Link>
                   <Link
@@ -242,12 +308,12 @@ export default function DashboardPage() {
                   <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
-                  Account Information
+                  Бүртгэлийн мэдээлэл
                 </h2>
                 <dl className="space-y-3">
-                  <InfoRow label="Email" value={user.email} />
+                  <InfoRow label="Имэйл" value={user.email} />
                   <InfoRow
-                    label="Role"
+                    label="Эрх"
                     value={
                       <span
                         className={clsx(
@@ -260,24 +326,35 @@ export default function DashboardPage() {
                     }
                   />
                   <InfoRow
-                    label="Status"
+                    label="Төлөв"
                     value={
                       <span className="flex items-center gap-1.5 text-sm text-green-600">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        Active
+                        Идэвхтэй
                       </span>
                     }
                   />
                   <InfoRow
-                    label="Member since"
-                    value={new Date(user.createdAt).toLocaleDateString('en-US', {
+                    label="Бүртгүүлсэн огноо"
+                    value={new Date(user.createdAt).toLocaleDateString('mn-MN', {
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric',
                     })}
                   />
-                  <InfoRow label="2FA" value={user.mfaEnabled ? 'Enabled' : 'Disabled'} />
+                  <InfoRow label="2FA" value={user.mfaEnabled ? 'Идэвхтэй' : 'Идэвхгүй'} />
                 </dl>
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <Link
+                    href="/settings/profile"
+                    className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Профайл засах
+                  </Link>
+                </div>
               </div>
 
               {/* Session management */}
@@ -286,12 +363,12 @@ export default function DashboardPage() {
                   <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
-                  Session Management
+                  Сесс удирдлага
                 </h2>
                 <div className="space-y-3">
                   <ActionButton
-                    label="Sign out of this device"
-                    description="Revokes the current session only"
+                    label="Энэ төхөөрөмжөөс гарах"
+                    description="Зөвхөн одоогийн сессийг устгана"
                     onClick={() => logout.mutate()}
                     loading={logout.isPending}
                     variant="secondary"
@@ -302,8 +379,8 @@ export default function DashboardPage() {
                     }
                   />
                   <ActionButton
-                    label="Sign out everywhere"
-                    description="Revokes all active sessions on all devices"
+                    label="Бүх төхөөрөмжөөс гарах"
+                    description="Бүх идэвхтэй сессийг устгана"
                     onClick={() => logoutAll.mutate()}
                     loading={logoutAll.isPending}
                     variant="danger"
@@ -331,7 +408,7 @@ export default function DashboardPage() {
                   <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                   </svg>
-                  <span className="text-sm font-semibold text-gray-900">Change Password</span>
+                  <span className="text-sm font-semibold text-gray-900">Нууц үг солих</span>
                 </div>
                 <svg
                   className={clsx('w-4 h-4 text-gray-400 transition-transform', showPasswordForm && 'rotate-180')}
@@ -350,7 +427,7 @@ export default function DashboardPage() {
                       <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      <p className="text-green-700 text-sm font-medium">Password changed successfully!</p>
+                      <p className="text-green-700 text-sm font-medium">Нууц үг амжилттай солигдлоо!</p>
                     </div>
                   ) : (
                     <form onSubmit={handleChangePassword} className="space-y-3">
@@ -361,7 +438,7 @@ export default function DashboardPage() {
                       )}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Current password</label>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Одоогийн нууц үг</label>
                           <input
                             type="password"
                             required
@@ -372,7 +449,7 @@ export default function DashboardPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">New password</label>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Шинэ нууц үг</label>
                           <input
                             type="password"
                             required
@@ -383,7 +460,7 @@ export default function DashboardPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Confirm new</label>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Шинийг давтах</label>
                           <input
                             type="password"
                             required
@@ -405,7 +482,7 @@ export default function DashboardPage() {
                               : 'bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98]',
                           )}
                         >
-                          {changePassword.isPending ? 'Updating…' : 'Update password'}
+                          {changePassword.isPending ? 'Шинэчилж байна…' : 'Нууц үг шинэчлэх'}
                         </button>
                       </div>
                     </form>

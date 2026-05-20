@@ -2,13 +2,13 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Transport, MicroserviceOptions } from '@nestjs/microservices';
 import { WinstonModule } from 'nest-winston';
 import { createAppLogger } from '@lms/shared-utils';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { setupAuthSwagger } from './swagger';
 
 async function bootstrap(): Promise<void> {
   const logger = createAppLogger({ service: 'auth-service' });
@@ -52,23 +52,7 @@ async function bootstrap(): Promise<void> {
   app.useGlobalInterceptors(new LoggingInterceptor());
 
   if (process.env.NODE_ENV !== 'production') {
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle('Auth Service API')
-      .setDescription('Authentication and authorization microservice')
-      .setVersion('1.0')
-      .addBearerAuth(
-        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-        'access-token',
-      )
-      .addTag('Auth', 'Authentication endpoints')
-      .addTag('Health', 'Health check')
-      .build();
-
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup('docs', app, document, {
-      swaggerOptions: { persistAuthorization: true },
-    });
-
+    setupAuthSwagger(app);
     logger.info('Swagger docs at /docs');
   }
 

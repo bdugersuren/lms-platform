@@ -67,6 +67,7 @@ model Course {
   totalMinutes Int          @default(0) @map("total_minutes")
   passingScore Float        @default(60) @map("passing_score")
   isSequential Boolean      @default(true) @map("is_sequential")
+  contentVersion Int        @default(1) @map("content_version")
   publishedAt  DateTime?    @map("published_at")
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
@@ -292,4 +293,24 @@ model LessonSkill {
 
   @@unique([lessonId, skillId])
   @@map("lesson_skills")
+}
+
+model EventOutbox {
+  id            String    @id @default(uuid())
+  eventId       String    @unique @map("event_id")
+  eventType     String    @map("event_type")
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id")
+  payload       Json
+  occurredAt    DateTime  @default(now()) @map("occurred_at")
+  publishedAt   DateTime? @map("published_at")
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([eventType])
+  @@index([aggregateType, aggregateId])
+  @@index([publishedAt, occurredAt])
+  @@map("event_outbox")
 }

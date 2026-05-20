@@ -27,6 +27,13 @@ export class HealthController {
         const ok = await this.minio.isAvailable();
         return { minio: { status: ok ? ('up' as const) : ('down' as const) } };
       },
+      async () => {
+        const [outboxPending, failureCount] = await Promise.all([
+          this.prisma.eventOutbox.count({ where: { publishedAt: null } }),
+          this.prisma.eventFailure.count({ where: { resolvedAt: null } }),
+        ]);
+        return { events: { status: 'up' as const, outboxPending, failureCount } };
+      },
       () => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024),
     ]);
   }

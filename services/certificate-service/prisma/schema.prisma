@@ -34,3 +34,40 @@ model Certificate {
   @@index([courseId])
   @@index([verifyCode])
 }
+
+model EventOutbox {
+  id            String    @id @default(uuid())
+  eventId       String    @unique @map("event_id")
+  eventType     String    @map("event_type")
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id")
+  payload       Json
+  occurredAt    DateTime  @default(now()) @map("occurred_at")
+  publishedAt   DateTime? @map("published_at")
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([eventType])
+  @@index([aggregateType, aggregateId])
+  @@index([publishedAt, occurredAt])
+  @@map("event_outbox")
+}
+
+model EventFailure {
+  id         String    @id @default(uuid())
+  eventId    String?   @map("event_id")
+  eventType  String    @map("event_type")
+  consumer   String
+  payload    Json
+  errorMsg   String    @map("error_msg")
+  stackTrace String?   @map("stack_trace")
+  retryCount Int       @default(0) @map("retry_count")
+  resolvedAt DateTime? @map("resolved_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@index([resolvedAt])
+  @@map("event_failures")
+}

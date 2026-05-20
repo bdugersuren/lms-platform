@@ -1,15 +1,17 @@
 import {
   ForbiddenException,
+  GoneException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { ProgressStatus, QuestionType } from '@prisma/client';
 import { ApiResponseBuilder } from '@lms/shared-utils';
-import { JwtPayload, UserRole } from '@lms/shared-types';
+import { EventTypes, JwtPayload, UserRole } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
 import { UpdateLessonProgressDto } from './dto/update-lesson-progress.dto';
 import { SubmitBlockAnswersDto, AnswerItemDto } from './dto/submit-block-answers.dto';
+import { isEnrollmentCutoverEnabled } from '../common/feature-flags';
 
 @Injectable()
 export class ProgressService {
@@ -19,6 +21,12 @@ export class ProgressService {
   ) {}
 
   async startLesson(enrollmentId: string, lessonId: string, user: JwtPayload) {
+    if (isEnrollmentCutoverEnabled()) {
+      throw new GoneException(
+        'Lesson progress is now managed by enrollment-service. Use POST /api/enrollments/:enrollmentId/progress/:lessonId/start.',
+      );
+    }
+
     const enrollment = await this.prisma.courseEnrollment.findUnique({
       where: { id: enrollmentId },
     });
@@ -57,6 +65,12 @@ export class ProgressService {
     dto: UpdateLessonProgressDto,
     user: JwtPayload,
   ) {
+    if (isEnrollmentCutoverEnabled()) {
+      throw new GoneException(
+        'Lesson progress is now managed by enrollment-service. Use PATCH /api/enrollments/:enrollmentId/progress/:lessonId.',
+      );
+    }
+
     const enrollment = await this.prisma.courseEnrollment.findUnique({
       where: { id: enrollmentId },
     });
@@ -80,6 +94,12 @@ export class ProgressService {
   }
 
   async completeLesson(enrollmentId: string, lessonId: string, user: JwtPayload) {
+    if (isEnrollmentCutoverEnabled()) {
+      throw new GoneException(
+        'Lesson completion is now managed by enrollment-service. Use POST /api/enrollments/:enrollmentId/progress/:lessonId/complete.',
+      );
+    }
+
     const enrollment = await this.prisma.courseEnrollment.findUnique({
       where: { id: enrollmentId },
       include: { course: true },
@@ -148,7 +168,7 @@ export class ProgressService {
       },
     });
 
-    this.messaging.publishEvent('lesson.completed', {
+    this.messaging.publishEvent(EventTypes.LESSON_COMPLETED, {
       enrollmentId,
       lessonId,
       studentId: user.sub,
@@ -167,6 +187,12 @@ export class ProgressService {
     dto: SubmitBlockAnswersDto,
     user: JwtPayload,
   ) {
+    if (isEnrollmentCutoverEnabled()) {
+      throw new GoneException(
+        'Interactive block answers are now managed by enrollment-service. Use POST /api/enrollments/:enrollmentId/progress/blocks/:blockProgressId/submit.',
+      );
+    }
+
     const enrollment = await this.prisma.courseEnrollment.findUnique({
       where: { id: enrollmentId },
     });

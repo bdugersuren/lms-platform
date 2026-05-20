@@ -3,9 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
-import { MessagingService } from '../messaging/messaging.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 
 @Injectable()
@@ -13,7 +15,7 @@ export class PayoutService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
-    private readonly messaging: MessagingService,
+    private readonly outbox: OutboxService,
   ) {}
 
   async requestPayout(ownerId: string, dto: CreatePayoutDto) {
@@ -27,25 +29,37 @@ export class PayoutService {
 
     const wallet = await this.walletService.findByOwner(ownerId);
 
-    const payout = await this.prisma.payout.create({
-      data: {
-        walletId: wallet.id,
-        amount: dto.amount,
-        bankName: dto.bankName,
-        accountNumber: dto.accountNumber,
-        accountName: dto.accountName,
-        note: dto.note,
-        status: 'PENDING',
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const payout = await tx.payout.create({
+        data: {
+          walletId: wallet.id,
+          amount: dto.amount,
+          bankName: dto.bankName,
+          accountNumber: dto.accountNumber,
+          accountName: dto.accountName,
+          note: dto.note,
+          status: 'PENDING',
+        },
+      });
 
-    this.messaging.publishEvent('wallet.payout.requested', {
-      ownerId,
-      payoutId: payout.id,
-      amount: dto.amount,
-    });
+      await this.outbox.enqueue(tx, {
+        eventId: randomUUID(),
+        eventType: EventTypes.WALLET_PAYOUT_REQUESTED,
+        eventVersion: 1,
+        occurredAt: new Date().toISOString(),
+        producer: 'wallet-service',
+        aggregateType: 'payout',
+        aggregateId: payout.id,
+        sequence: 1,
+        payload: {
+          ownerId,
+          payoutId: payout.id,
+          amount: dto.amount,
+        },
+      });
 
-    return payout;
+      return payout;
+    });
   }
 
   async listMyPayouts(ownerId: string, page = 1, limit = 20) {

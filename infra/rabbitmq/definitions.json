@@ -59,35 +59,190 @@
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {}
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
     },
     {
       "name": "user.auth-events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {}
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
     },
     {
       "name": "notification.auth-events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {}
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
     },
     {
       "name": "course.events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {}
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
     },
     {
       "name": "course.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {}
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "enrollment.publisher",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "payment.publisher",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "wallet.publisher",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "wallet.course-events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "certificate.publisher",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "certificate.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "quiz.publisher",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "assignment.publisher",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "analytics.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "notification.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "user.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "media.publisher",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "ai.publisher",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "dead"
+      }
+    },
+    {
+      "name": "lms.events.retry",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 30000,
+        "x-dead-letter-exchange": "lms.events"
+      }
     },
     {
       "name": "lms.dead-letter",
@@ -128,6 +283,118 @@
       "destination": "course.events",
       "destination_type": "queue",
       "routing_key": "course.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "enrollment.publisher",
+      "destination_type": "queue",
+      "routing_key": "payment.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "enrollment.publisher",
+      "destination_type": "queue",
+      "routing_key": "course.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "wallet.publisher",
+      "destination_type": "queue",
+      "routing_key": "enrollment.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "wallet.course-events",
+      "destination_type": "queue",
+      "routing_key": "course.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "certificate.publisher",
+      "destination_type": "queue",
+      "routing_key": "enrollment.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "certificate.events",
+      "destination_type": "queue",
+      "routing_key": "enrollment.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "analytics.events",
+      "destination_type": "queue",
+      "routing_key": "#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "notification.events",
+      "destination_type": "queue",
+      "routing_key": "auth.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "notification.events",
+      "destination_type": "queue",
+      "routing_key": "assignment.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "notification.events",
+      "destination_type": "queue",
+      "routing_key": "quiz.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "notification.events",
+      "destination_type": "queue",
+      "routing_key": "enrollment.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "notification.events",
+      "destination_type": "queue",
+      "routing_key": "payment.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "user.events",
+      "destination_type": "queue",
+      "routing_key": "auth.user.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.dead-letter",
+      "vhost": "/",
+      "destination": "lms.dead-letter",
+      "destination_type": "queue",
+      "routing_key": "",
       "arguments": {}
     }
   ]

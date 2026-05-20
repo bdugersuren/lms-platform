@@ -1,0 +1,323 @@
+# =============================================================================
+# config/services.yml
+# Centralized service registry — ENG-001
+#
+# This is the single source of truth for all service metadata.
+# Used by:
+#   scripts/generate-docs.js   — generates docs/generated/current-architecture.md
+#   scripts/verify-services.js — validates this file against docker-compose.yml
+#
+# IMPORTANT: This file documents metadata. It does NOT drive runtime behavior.
+# docker-compose.yml remains the runtime source of truth.
+#
+# Adding a new service:
+#   1. Add an entry below with all required fields.
+#   2. Set status: reserved if the service is not yet in docker-compose.yml.
+#   3. Run: pnpm docs:generate
+#   4. Run: pnpm docs:verify:services
+# =============================================================================
+
+platform:
+  name: LMS Platform
+  description: Enterprise-grade AI-native learning management platform
+
+# Port allocation rules (documented here so there is one place to check):
+#   3000        gateway (public binding)
+#   3001–3013   allocated domain services (sequential by domain group)
+#   3002        web frontend (internal only, not host-exposed)
+#   3014+       reserved for future services (user-service moved here from 3002)
+#   5432        postgres
+#   6379        redis
+#   5672/15672  rabbitmq / management UI
+#   9000/9001   minio / console
+#   11434       ollama
+meta:
+  container_prefix: lms
+  health_path: /api/health
+  default_memory_mb: 192
+  default_host_binding: "127.0.0.1"
+
+# =============================================================================
+# All services — flat array, ordered by compose profile start order.
+# Fields:
+#   name          Compose service key and Docker DNS hostname
+#   kind          infrastructure | api-gateway | backend-service | frontend
+#   container     Docker container name (lms-{name})
+#   port          Primary internal port
+#   host_binding  Host interface exposed on (127.0.0.1 = localhost only, 0.0.0.0 = all, internal = no host port)
+#   profile       Compose profile (default = always starts)
+#   database      PostgreSQL database name (backend services only)
+#   env_var_prefix Root .env variable prefix for this service (e.g. AUTH → AUTH_PORT, AUTH_DATABASE_URL)
+#   upstream      Other services this service calls via HTTP (cross-service REST)
+#   status        Omit for active services. "reserved" = not yet in docker-compose.yml.
+#   description   Human-readable purpose statement
+# =============================================================================
+
+services:
+
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+  # Always start. No compose profile required (profile: default).
+
+  - name: postgres
+    kind: infrastructure
+    container: lms-postgres
+    port: 5432
+    host_binding: "127.0.0.1"
+    profile: default
+    description: Primary PostgreSQL instance. Each service owns its own database/schema. Never access another service's schema directly.
+
+  - name: redis
+    kind: infrastructure
+    container: lms-redis
+    port: 6379
+    host_binding: "127.0.0.1"
+    profile: default
+    description: Shared cache, rate limiting, and session store.
+
+  - name: rabbitmq
+    kind: infrastructure
+    container: lms-rabbitmq
+    port: 5672
+    host_binding: "127.0.0.1"
+    profile: default
+    description: Message broker for async inter-service communication. Management UI on port 15672.
+
+  - name: minio
+    kind: infrastructure
+    container: lms-minio
+    port: 9000
+    host_binding: "127.0.0.1"
+    profile: default
+    description: Object storage for media files and generated certificates. Console UI on port 9001.
+
+  # ── Core profile ───────────────────────────────────────────────────────────
+  # Minimum backend for a working API. Start before any domain profile.
+
+  - name: nginx
+    kind: infrastructure
+    container: lms-nginx
+    port: 80
+    host_binding: "0.0.0.0"
+    profile: core
+    description: Reverse proxy. Routes public HTTP traffic to gateway.
+
+  - name: gateway
+    kind: api-gateway
+    container: lms-gateway
+    port: 3000
+    host_binding: "0.0.0.0"
+    profile: core
+    env_var_prefix: GATEWAY
+    description: Routes client API requests to backend services. Handles JWT validation, rate limiting, and CORS.
+
+  - name: auth-service
+    kind: backend-service
+    container: lms-auth-service
+    port: 3001
+    host_binding: "127.0.0.1"
+    profile: core
+    database: auth_db
+    env_var_prefix: AUTH
+    description: Handles login, registration, JWT tokens, MFA, and OAuth.
+
+  - name: user-service
+    kind: backend-service
+    container: lms-user-service
+    port: 3014
+    host_binding: "127.0.0.1"
+    profile: core
+    database: user_db
+    env_var_prefix: USER
+    description: "Owns display profiles: displayName, avatar, bio, locale, timezone, onboarding metadata. Bootstrapped automatically from auth.user.registered events. Exposes GET /users/me, PATCH /users/me, GET /users/:id."
+
+  - name: course-service
+    kind: backend-service
+    container: lms-course-service
+    port: 3003
+    host_binding: "127.0.0.1"
+    profile: core
+    database: course_db
+    env_var_prefix: COURSE
+    description: Owns courses, modules, lessons, skills, curriculum, and prerequisites.
+
+  - name: enrollment-service
+    kind: backend-service
+    container: lms-enrollment-service
+    port: 3004
+    host_binding: "127.0.0.1"
+    profile: core
+    database: enrollment_db
+    env_var_prefix: ENROLLMENT
+    upstream: [course-service]
+    description: Owns enrollments, lesson progress, and course completion state. Calls course-service via REST.
+
+  # ── Learn profile ──────────────────────────────────────────────────────────
+
+  - name: quiz-service
+    kind: backend-service
+    container: lms-quiz-service
+    port: 3005
+    host_binding: "127.0.0.1"
+    profile: learn
+    database: quiz_db
+    env_var_prefix: QUIZ
+    description: Owns quizzes, adaptive exams, question bank, attempts, and grading.
+
+  - name: assignment-service
+    kind: backend-service
+    container: lms-assignment-service
+    port: 3006
+    host_binding: "127.0.0.1"
+    profile: learn
+    database: assignment_db
+    env_var_prefix: ASSIGNMENT
+    description: Owns assignments, submissions, grading, and instructor feedback.
+
+  # ── Finance profile ────────────────────────────────────────────────────────
+  # Financial logic is isolated per architecture rules. Never co-locate with other domains.
+
+  - name: wallet-service
+    kind: backend-service
+    container: lms-wallet-service
+    port: 3007
+    host_binding: "127.0.0.1"
+    profile: finance
+    database: wallet_db
+    env_var_prefix: WALLET
+    description: Owns wallets, balances, transactions, revenue sharing, and payouts.
+
+  - name: payment-service
+    kind: backend-service
+    container: lms-payment-service
+    port: 3008
+    host_binding: "127.0.0.1"
+    profile: finance
+    database: payment_db
+    env_var_prefix: PAYMENT
+    description: Owns QPay, SocialPay, payment verification, and webhook handling.
+
+  # ── AI profile ─────────────────────────────────────────────────────────────
+  # All LLM inference routes through Ollama. Never call external AI APIs.
+
+  - name: ollama
+    kind: infrastructure
+    container: lms-ollama
+    port: 11434
+    host_binding: "127.0.0.1"
+    profile: ai
+    description: Local LLM inference engine. All AI inference must route through Ollama — never external APIs.
+
+  - name: ai-service
+    kind: backend-service
+    container: lms-ai-service
+    port: 3009
+    host_binding: "127.0.0.1"
+    profile: ai
+    database: ai_db
+    memory_mb: 384
+    env_var_prefix: AI
+    upstream: [ollama]
+    description: Owns AI tutor sessions, essay scoring, recommendations, and adaptive learning.
+
+  # ── Ops profile ────────────────────────────────────────────────────────────
+
+  - name: notification-service
+    kind: backend-service
+    container: lms-notification-service
+    port: 3010
+    host_binding: "127.0.0.1"
+    profile: ops
+    database: notification_db
+    env_var_prefix: NOTIFICATION
+    description: Owns email, SMS, push, and in-app notifications.
+
+  - name: media-service
+    kind: backend-service
+    container: lms-media-service
+    port: 3011
+    host_binding: "127.0.0.1"
+    profile: ops
+    database: media_db
+    memory_mb: 320
+    env_var_prefix: MEDIA
+    description: Owns video uploads, transcoding, subtitles, and media management. Uses MinIO for storage.
+
+  - name: certificate-service
+    kind: backend-service
+    container: lms-certificate-service
+    port: 3012
+    host_binding: "127.0.0.1"
+    profile: ops
+    database: certificate_db
+    env_var_prefix: CERTIFICATE
+    description: Owns certificate generation, QR verification, and public validation. Uses MinIO for storage.
+
+  - name: analytics-service
+    kind: backend-service
+    container: lms-analytics-service
+    port: 3013
+    host_binding: "127.0.0.1"
+    profile: ops
+    database: analytics_db
+    env_var_prefix: ANALYTICS
+    description: Owns KPI tracking, reports, AI analytics, and dashboards.
+
+  # ── Frontend profile ───────────────────────────────────────────────────────
+
+  - name: web
+    kind: frontend
+    container: lms-web
+    port: 3002
+    host_binding: internal
+    profile: frontend
+    description: Next.js student, instructor, and admin user interface. Served through nginx.
+
+# =============================================================================
+# Docker Compose profile descriptions
+# Used by the doc generator for the Profiles table.
+# =============================================================================
+
+docker_compose_profiles:
+  default:
+    description: Starts infrastructure only — postgres, redis, rabbitmq, minio.
+    services: [postgres, redis, rabbitmq, minio]
+
+  core:
+    description: Starts the minimum backend needed for auth, courses, enrollment, and API routing.
+    services: [nginx, gateway, auth-service, course-service, enrollment-service]
+
+  learn:
+    description: Starts learning assessment services — quizzes and assignments.
+    services: [quiz-service, assignment-service]
+
+  finance:
+    description: Starts payment and wallet services. Financial logic is isolated.
+    services: [wallet-service, payment-service]
+
+  ops:
+    description: Starts operational support services — notifications, media, certificates, analytics.
+    services: [notification-service, media-service, certificate-service, analytics-service]
+
+  frontend:
+    description: Starts the Next.js web application. Requires core profile for nginx.
+    services: [web]
+
+  ai:
+    description: Starts local AI inference and the AI service. Requires core profile.
+    services: [ollama, ai-service]
+
+# =============================================================================
+# Development seed credentials
+# =============================================================================
+
+seed_credentials:
+  note: Development seed users only. Do not use these values in production.
+  admin:
+    email: admin@know.mn
+    password: Admin!1234
+  instructor:
+    email: instructor1@know.mn
+    password: Admin!1234
+  student:
+    email: student1@know.mn
+    password: Student!1234

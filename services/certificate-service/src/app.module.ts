@@ -9,6 +9,8 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { CertificateModule } from './certificate/certificate.module';
 import { EventListenerModule } from './events/event-listener.module';
+import { EventFailureModule } from './event-failure/event-failure.module';
+import { OutboxModule } from './outbox/outbox.module';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { EventListenerModule } from './events/event-listener.module';
     AuthModule,
     CertificateModule,
     EventListenerModule,
+    EventFailureModule,
+    OutboxModule,
   ],
 })
 export class AppModule {}

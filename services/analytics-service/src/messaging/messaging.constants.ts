@@ -1,14 +1,15 @@
+import { AuthEventPatterns, EventTypes } from '@lms/shared-types';
+
 export const ANALYTICS_RABBITMQ_CLIENT = 'ANALYTICS_RABBITMQ_CLIENT';
 
-// All event types the analytics service ingests
 export const TRACKED_EVENTS = {
-  USER_REGISTERED:           'auth.user.registered',
-  ENROLLMENT_CREATED:        'enrollment.created',
-  ENROLLMENT_COMPLETED:      'enrollment.completed',
-  PAYMENT_CONFIRMED:         'payment.confirmed',
-  PAYMENT_FAILED:            'payment.failed',
-  QUIZ_COMPLETED:            'quiz.attempt.completed',
-  ASSIGNMENT_GRADED:         'assignment.submission.graded',
-  MEDIA_UPLOADED:            'media.file.uploaded',
-  CERTIFICATE_ISSUED:        'certificate.issued',
+  USER_REGISTERED:  AuthEventPatterns.USER_REGISTERED,
+  ENROLLMENT_CREATED:   EventTypes.ENROLLMENT_CREATED,
+  ENROLLMENT_COMPLETED: EventTypes.ENROLLMENT_COMPLETED,
+  PAYMENT_CONFIRMED:    EventTypes.PAYMENT_CONFIRMED,
+  PAYMENT_FAILED:       EventTypes.PAYMENT_FAILED,
+  QUIZ_COMPLETED:       EventTypes.QUIZ_ATTEMPT_SUBMITTED,
+  ASSIGNMENT_GRADED:    EventTypes.ASSIGNMENT_SUBMISSION_GRADED,
+  MEDIA_UPLOADED:       EventTypes.MEDIA_FILE_UPLOADED,
+  CERTIFICATE_ISSUED:   EventTypes.CERTIFICATE_ISSUED,
 } as const;
