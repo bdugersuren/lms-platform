@@ -25,6 +25,10 @@ async function bootstrap(): Promise<void> {
       queue: 'auth.events',
       queueOptions: {
         durable: true,
+        arguments: {
+          'x-dead-letter-exchange': 'lms.dead-letter',
+          'x-dead-letter-routing-key': 'dead',
+        },
       },
       noAck: false,
       prefetchCount: 10,

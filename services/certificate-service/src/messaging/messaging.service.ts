@@ -12,5 +12,9 @@ export class MessagingService implements OnModuleDestroy {
     this.logger.debug(`Emitted: ${routingKey}`);
   }
 
+  async publishEvent(routingKey: string, data: object): Promise<void> {
+    this.emit(routingKey, data);
+  }
+
   async onModuleDestroy(): Promise<void> { await this.client.close(); }
 }

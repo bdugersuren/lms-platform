@@ -26,7 +26,13 @@ async function bootstrap(): Promise<void> {
       exchangeType: 'topic',
       routingKey: 'auth.#',
       queue: 'user.events',
-      queueOptions: { durable: true },
+      queueOptions: {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': 'lms.dead-letter',
+          'x-dead-letter-routing-key': 'dead',
+        },
+      },
       noAck: false,
     },
   });
