@@ -124,6 +124,7 @@ export class AttemptService {
       quizId,
       studentId,
       attemptId,
+      courseId: quiz.courseId ?? undefined,
       score,
       passed,
     });

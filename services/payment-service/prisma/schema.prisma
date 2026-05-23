@@ -15,6 +15,7 @@ enum PaymentProvider {
   QPAY
   SOCIAL_PAY
   MOCK
+  WALLET
 }
 
 enum PaymentPurpose {

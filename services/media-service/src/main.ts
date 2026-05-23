@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -51,6 +52,21 @@ async function bootstrap(): Promise<void> {
       swaggerOptions: { persistAuthorization: true },
     });
   }
+
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.RMQ,
+    options: {
+      urls: [process.env.RABBITMQ_URL ?? 'amqp://localhost:5672'],
+      exchange: process.env.RABBITMQ_EXCHANGE ?? 'lms.events',
+      exchangeType: 'topic',
+      routingKey: 'media.transcode.queued',
+      queue: 'media.transcode.worker',
+      queueOptions: { durable: true },
+      noAck: false,
+    },
+  });
+
+  await app.startAllMicroservices();
 
   const port = parseInt(process.env.PORT ?? '3011', 10);
   await app.listen(port, '0.0.0.0');

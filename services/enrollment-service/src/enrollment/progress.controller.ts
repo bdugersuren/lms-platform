@@ -9,8 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/jwt.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { ProgressService } from './progress.service';
 import { UpdateLessonProgressDto } from './dto/update-lesson-progress.dto';
 import { SubmitBlockAnswersDto } from './dto/submit-block-answers.dto';

@@ -76,7 +76,7 @@ export class PaymentService {
           const msg = (walletErr as { response?: { data?: { message?: string } } })?.response?.data?.message
             ?? (walletErr as Error)?.message
             ?? 'Хэтэвч хасалт амжилтгүй';
-          await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED' } });
+          await this.failPayment(payment.id, payment.userId, payment, msg);
           throw new BadRequestException(msg);
         }
         return this.completePayment(payment.id);
@@ -134,10 +134,7 @@ export class PaymentService {
         },
       });
     } catch (err) {
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'FAILED' },
-      });
+      await this.failPayment(payment.id, payment.userId, payment, (err as Error)?.message);
       throw err;
     }
   }
@@ -239,6 +236,39 @@ export class PaymentService {
 
     this.logger.log(`Payment completed: ${paymentId} purpose=${payment.purpose}`);
     return payment;
+  }
+
+  private async failPayment(
+    paymentId: string,
+    userId: string,
+    payment: { courseId?: string | null; amount: { toString(): string }; currency: string; provider: string; purpose: string },
+    reason?: string,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({ where: { id: paymentId }, data: { status: 'FAILED' } });
+      await this.outbox.enqueue(tx, {
+        eventId: randomUUID(),
+        eventType: EventTypes.PAYMENT_FAILED,
+        eventVersion: 1,
+        occurredAt: new Date().toISOString(),
+        producer: 'payment-service',
+        aggregateType: 'payment',
+        aggregateId: paymentId,
+        sequence: 1,
+        correlationId: paymentId,
+        payload: {
+          paymentId,
+          userId,
+          courseId: payment.courseId ?? undefined,
+          amount: payment.amount.toString(),
+          currency: payment.currency,
+          provider: payment.provider,
+          purpose: payment.purpose as 'COURSE_PURCHASE' | 'WALLET_TOPUP',
+          reason,
+        },
+      });
+    });
+    this.logger.warn(`Payment failed: ${paymentId} reason=${reason}`);
   }
 
   async cancelExpiredPayments(): Promise<number> {

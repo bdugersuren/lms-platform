@@ -4,7 +4,7 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WinstonModule } from 'nest-winston';
 import { createAppLogger } from '@lms/shared-utils';
@@ -59,8 +59,6 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix('api');
 
-  app.enableVersioning({ type: VersioningType.URI });
-
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -75,7 +73,7 @@ async function bootstrap(): Promise<void> {
   if (process.env.NODE_ENV !== 'production') {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('LMS Platform API')
-      .setDescription('Enterprise-grade AI-native LMS — API Gateway')
+      .setDescription('Enterprise-grade AI-native LMS — API Gateway\n\nURL pattern: `/api/{service}/{resource}` (e.g. /api/auth/login, /api/courses)')
       .setVersion('1.0')
       .addBearerAuth(
         { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },

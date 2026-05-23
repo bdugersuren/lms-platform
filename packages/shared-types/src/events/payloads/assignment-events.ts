@@ -2,6 +2,7 @@ export interface AssignmentSubmissionGradedPayload {
   submissionId: string;
   assignmentId: string;
   studentId: string;
+  courseId?: string;
   score: number;
   maxScore: number;
   passed: boolean;

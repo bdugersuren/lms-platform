@@ -7,6 +7,7 @@ import { EventTypes } from '@lms/shared-types';
 import { MessagingService } from '../messaging/messaging.service';
 import { UpdateMediaDto } from './dto/update-media.dto';
 import { QueryMediaDto } from './dto/query-media.dto';
+import { PresignUploadDto } from './dto/presign-upload.dto';
 
 const ALLOWED_MIME = new Set([
   'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
@@ -67,6 +68,61 @@ export class MediaService {
 
     this.logger.log(`Uploaded ${key} for user ${userId}`);
     return this.serialize(record);
+  }
+
+  // ─── Presigned upload (browser → MinIO directly) ─────────────────────────
+
+  async createPresignedUpload(userId: string, dto: PresignUploadDto) {
+    if (!ALLOWED_MIME.has(dto.mimeType)) {
+      throw new BadRequestException(`Unsupported file type: ${dto.mimeType}`);
+    }
+    if (dto.size > this.maxSizeBytes) {
+      throw new BadRequestException(`File exceeds ${this.config.get('UPLOAD_MAX_SIZE_MB', 500)}MB limit`);
+    }
+
+    const mediaType = this.minio.resolveMediaType(dto.mimeType);
+    const key = this.minio.buildKey(dto.mimeType, dto.filename);
+    const uploadUrl = await this.minio.presignedPutObject(key);
+
+    const record = await this.prisma.mediaFile.create({
+      data: {
+        userId,
+        key,
+        url: `${this.minio['publicUrl']}/${this.minio.bucket}/${key}`,
+        originalName: dto.filename,
+        mimeType: dto.mimeType,
+        mediaType,
+        size: BigInt(dto.size),
+        status: MediaStatus.UPLOADING,
+        title: dto.filename,
+      },
+    });
+
+    const expiresAt = new Date(Date.now() + this.minio.presignExpires * 1000).toISOString();
+    this.logger.log(`Presigned upload created: key=${key} user=${userId}`);
+    return { uploadUrl, key, mediaFileId: record.id, expiresAt };
+  }
+
+  async finalizeUpload(userId: string, key: string) {
+    const record = await this.prisma.mediaFile.findFirst({
+      where: { key, userId, status: MediaStatus.UPLOADING },
+    });
+    if (!record) throw new NotFoundException('Pending upload not found');
+
+    const updated = await this.prisma.mediaFile.update({
+      where: { id: record.id },
+      data: { status: MediaStatus.READY },
+    });
+
+    this.messaging.emit(EventTypes.MEDIA_FILE_UPLOADED, {
+      mediaFileId: record.id,
+      userId,
+      mediaType: record.mediaType,
+      key,
+    });
+
+    this.logger.log(`Finalized upload: key=${key} user=${userId}`);
+    return this.serialize(updated);
   }
 
   // ─── List ─────────────────────────────────────────────────────────────────

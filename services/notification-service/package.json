@@ -2,7 +2,7 @@
   "name": "@lms/notification-service",
   "version": "0.1.0",
   "private": true,
-  "description": "LMS Notification Service \u2014 email, SMS, push, in-app notifications",
+  "description": "LMS Notification Service — email, SMS, push, in-app notifications",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -29,11 +29,11 @@
     "@nestjs/passport": "catalog:",
     "@nestjs/platform-express": "catalog:",
     "@nestjs/platform-socket.io": "catalog:",
+    "@nestjs/schedule": "^6.1.3",
     "@nestjs/swagger": "catalog:",
     "@nestjs/terminus": "catalog:",
     "@nestjs/websockets": "catalog:",
     "@prisma/client": "catalog:",
-    "prisma": "catalog:",
     "amqp-connection-manager": "catalog:",
     "amqplib": "catalog:",
     "class-transformer": "catalog:",
@@ -43,6 +43,7 @@
     "nodemailer": "catalog:",
     "passport": "catalog:",
     "passport-jwt": "catalog:",
+    "prisma": "catalog:",
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
     "socket.io": "catalog:",
@@ -54,10 +55,10 @@
     "@types/node": "catalog:",
     "@types/nodemailer": "catalog:",
     "@types/passport-jwt": "catalog:",
+    "nodemon": "catalog:",
     "ts-node": "catalog:",
     "tsconfig-paths": "catalog:",
-    "typescript": "catalog:",
-    "nodemon": "catalog:"
+    "typescript": "catalog:"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

@@ -13,8 +13,22 @@ export interface MediaFileDeletedPayload {
 }
 
 export interface MediaTranscodeQueuedPayload {
+  jobId: string;
   mediaFileId: string;
-  userId: string;
-  sourceUrl: string;
-  targetFormat: string;
+  sourceKey: string;
+  format: string;
+}
+
+export interface MediaTranscodeCompletedPayload {
+  jobId: string;
+  mediaFileId: string;
+  format: string;
+  outputKey: string;
+}
+
+export interface MediaTranscodeFailedPayload {
+  jobId: string;
+  mediaFileId: string;
+  format: string;
+  errorMsg: string;
 }

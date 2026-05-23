@@ -51,7 +51,7 @@ RUN pnpm --filter @lms/media-service exec prisma generate && \
     pnpm --filter @lms/media-service run build
 
 FROM node:${NODE_VERSION} AS runner
-RUN apk add --no-cache openssl curl && \
+RUN apk add --no-cache openssl curl ffmpeg && \
     addgroup -S lms && adduser -S lms -G lms
 WORKDIR /app
 ENV NODE_ENV=production

@@ -43,6 +43,9 @@ export interface CourseProjectionPayload {
   totalMinutes: number;
   contentVersion: number;
   publishedAt?: string | null;
+  requireQuizPass: boolean;
+  requireAssignmentPass: boolean;
+  minimumScorePercent: number;
 }
 
 export interface ModuleProjectionPayload {

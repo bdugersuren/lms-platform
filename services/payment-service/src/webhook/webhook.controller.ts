@@ -13,8 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ApiResponseBuilder } from '@lms/shared-utils';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { WebhookService } from './webhook.service';
 
 interface JwtUser { sub: string; email: string; role: string }

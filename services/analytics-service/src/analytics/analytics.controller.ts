@@ -1,7 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiResponseBuilder } from '@lms/shared-utils';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '@lms/shared-auth';
 import { AnalyticsService } from './analytics.service';
 
 @ApiTags('Analytics')
@@ -64,6 +64,13 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Count of events grouped by type' })
   async eventBreakdown() {
     const data = await this.service.getEventBreakdown();
+    return ApiResponseBuilder.success(data);
+  }
+
+  @Get('health/ingestion')
+  @ApiOperation({ summary: 'Event ingestion health — recent event count and latest event timestamp' })
+  async ingestionHealth() {
+    const data = await this.service.getIngestionHealth();
     return ApiResponseBuilder.success(data);
   }
 }

@@ -10,6 +10,12 @@ export interface SendEmailOptions {
   text?: string;
 }
 
+export interface SendEmailResult {
+  success: boolean;
+  providerMessageId?: string;
+  failureReason?: string;
+}
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -37,7 +43,7 @@ export class EmailService {
     }
   }
 
-  async send(opts: SendEmailOptions): Promise<void> {
+  async send(opts: SendEmailOptions): Promise<SendEmailResult> {
     try {
       const info = await this.transporter.sendMail({
         from: this.from,
@@ -47,13 +53,16 @@ export class EmailService {
         text: opts.text ?? opts.html.replace(/<[^>]+>/g, ''),
       });
 
+      const messageId = (info as { messageId?: string }).messageId;
       if (!this.enabled) {
         this.logger.log(`[EMAIL STUB] To: ${opts.to} | Subject: ${opts.subject}`);
       } else {
-        this.logger.log(`Email sent to ${opts.to}: ${(info as { messageId?: string }).messageId ?? ''}`);
+        this.logger.log(`Email sent to ${opts.to}: ${messageId ?? ''}`);
       }
+      return { success: true, providerMessageId: messageId };
     } catch (err) {
       this.logger.error(`Failed to send email to ${opts.to}`, err);
+      return { success: false, failureReason: (err as Error)?.message ?? 'Unknown email error' };
     }
   }
 

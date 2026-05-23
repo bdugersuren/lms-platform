@@ -324,10 +324,60 @@ export class ProgressService {
     }
   }
 
+  async recordQuizAttempt(
+    courseId: string,
+    studentId: string,
+    quizId: string,
+    passed: boolean,
+    score: number,
+  ): Promise<void> {
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { courseId_studentId: { courseId, studentId } },
+    });
+    if (!enrollment) return;
+
+    await this.prisma.quizAttemptRecord.upsert({
+      where: { enrollmentId_quizId: { enrollmentId: enrollment.id, quizId } },
+      create: { enrollmentId: enrollment.id, quizId, courseId, passed, score },
+      update: { passed, score, attemptedAt: new Date() },
+    });
+
+    await this.recalculateEnrollmentProgress(enrollment.id);
+  }
+
+  async recordAssignmentGrade(
+    courseId: string,
+    studentId: string,
+    assignmentId: string,
+    passed: boolean,
+    score: number,
+    maxScore: number,
+  ): Promise<void> {
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { courseId_studentId: { courseId, studentId } },
+    });
+    if (!enrollment) return;
+
+    await this.prisma.assignmentGradeRecord.upsert({
+      where: { enrollmentId_assignmentId: { enrollmentId: enrollment.id, assignmentId } },
+      create: { enrollmentId: enrollment.id, assignmentId, courseId, passed, score, maxScore },
+      update: { passed, score, maxScore, gradedAt: new Date() },
+    });
+
+    await this.recalculateEnrollmentProgress(enrollment.id);
+  }
+
   private async recalculateEnrollmentProgress(enrollmentId: string) {
-    const [enrollment, progresses] = await Promise.all([
+    const [enrollment, progresses, courseProjection] = await Promise.all([
       this.prisma.enrollment.findUnique({ where: { id: enrollmentId } }),
       this.prisma.lessonProgress.findMany({ where: { enrollmentId } }),
+      this.prisma.enrollment
+        .findUnique({ where: { id: enrollmentId }, select: { courseId: true } })
+        .then((e) =>
+          e
+            ? this.prisma.courseProjection.findUnique({ where: { courseId: e.courseId } })
+            : null,
+        ),
     ]);
 
     if (!enrollment) throw new NotFoundException('Enrollment not found');
@@ -337,22 +387,37 @@ export class ProgressService {
 
     const completedCount = progresses.filter((lp) => lp.completed).length;
     const progressPercent = Math.round((completedCount / total) * 100);
-    const allCompleted = completedCount === total;
+    const allLessonsDone = completedCount === total;
 
     const totalScore =
       progresses.reduce((sum, lp) => sum + (lp.score ?? 0), 0) / total;
+
+    let quizPassed = true;
+    if (courseProjection?.requireQuizPass) {
+      const records = await this.prisma.quizAttemptRecord.findMany({ where: { enrollmentId } });
+      quizPassed = records.length > 0 && records.every((r) => r.passed);
+    }
+
+    let assignmentPassed = true;
+    if (courseProjection?.requireAssignmentPass) {
+      const records = await this.prisma.assignmentGradeRecord.findMany({ where: { enrollmentId } });
+      assignmentPassed = records.length > 0 && records.every((r) => r.passed);
+    }
+
+    const meetsMinScore = totalScore >= (courseProjection?.minimumScorePercent ?? 0);
+    const completed = allLessonsDone && quizPassed && assignmentPassed && meetsMinScore;
 
     const updatedEnrollment = await this.prisma.enrollment.update({
       where: { id: enrollmentId },
       data: {
         progressPercent,
         totalScore: Math.round(totalScore * 100) / 100,
-        completed: allCompleted,
-        completedAt: allCompleted ? new Date() : null,
+        completed,
+        completedAt: completed ? new Date() : null,
       },
     });
 
-    if (allCompleted && !enrollment.completed) {
+    if (completed && !enrollment.completed) {
       let courseTitle: string | undefined;
       let recipientName: string | undefined;
 

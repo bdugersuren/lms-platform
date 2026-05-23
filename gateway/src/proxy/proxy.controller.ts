@@ -12,6 +12,7 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { lastValueFrom } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
+import * as qs from 'qs';
 import { SERVICE_ROUTES } from './services.config';
 
 @ApiExcludeController()
@@ -44,9 +45,7 @@ export class ProxyController {
     }
 
     const targetUrl = `${upstreamBase}/api/${service}${wildcard ? `/${wildcard}` : ''}`;
-    const queryString = new URLSearchParams(
-      req.query as Record<string, string>,
-    ).toString();
+    const queryString = qs.stringify(req.query, { encode: false, arrayFormat: 'repeat' });
     const url = queryString ? `${targetUrl}?${queryString}` : targetUrl;
 
     const forwardHeaders: Record<string, string> = {

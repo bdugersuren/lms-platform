@@ -214,6 +214,9 @@ export class CourseEventsPublisher {
       totalMinutes: course.totalMinutes,
       contentVersion,
       publishedAt: course.publishedAt?.toISOString() ?? null,
+      requireQuizPass: course.requireQuizPass,
+      requireAssignmentPass: course.requireAssignmentPass,
+      minimumScorePercent: course.minimumScorePercent,
     };
   }
 

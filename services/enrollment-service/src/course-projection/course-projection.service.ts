@@ -237,6 +237,9 @@ export class CourseProjectionService {
         totalMinutes: course.totalMinutes,
         contentVersion: course.contentVersion,
         publishedAt: this.toDate(course.publishedAt),
+        requireQuizPass: course.requireQuizPass ?? false,
+        requireAssignmentPass: course.requireAssignmentPass ?? false,
+        minimumScorePercent: course.minimumScorePercent ?? 0,
       },
       update: {
         title: course.title,
@@ -250,6 +253,9 @@ export class CourseProjectionService {
         contentVersion: course.contentVersion,
         publishedAt: this.toDate(course.publishedAt),
         deletedAt: null,
+        requireQuizPass: course.requireQuizPass ?? false,
+        requireAssignmentPass: course.requireAssignmentPass ?? false,
+        minimumScorePercent: course.minimumScorePercent ?? 0,
       },
     });
   }
@@ -373,6 +379,9 @@ export class CourseProjectionService {
         totalMinutes: course.totalMinutes,
         contentVersion,
         publishedAt: course.publishedAt ?? null,
+        requireQuizPass: false,
+        requireAssignmentPass: false,
+        minimumScorePercent: 0,
       });
 
       for (const mod of course.modules) {

@@ -16,7 +16,7 @@ import { buildPaginationMeta } from '@lms/shared-utils';
 import { hashPassword, comparePassword } from '@lms/shared-utils';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
-import { TokenService } from './token.service';
+import { TokenService, SessionMeta, SessionView } from './token.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -34,7 +34,7 @@ export class AuthService {
 
   // ─── Registration ────────────────────────────────────────────────────────────
 
-  async register(dto: RegisterDto): Promise<IAuthTokens> {
+  async register(dto: RegisterDto, meta?: SessionMeta): Promise<IAuthTokens> {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -61,12 +61,12 @@ export class AuthService {
       role: user.role,
     });
 
-    return this.tokenService.generateTokenPair(user.id, user.email, user.role as UserRole);
+    return this.tokenService.generateTokenPair(user.id, user.email, user.role as UserRole, meta);
   }
 
   // ─── Login ───────────────────────────────────────────────────────────────────
 
-  async login(dto: LoginDto): Promise<IAuthTokens> {
+  async login(dto: LoginDto, meta?: SessionMeta): Promise<IAuthTokens> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -87,7 +87,7 @@ export class AuthService {
       email: user.email,
     });
 
-    return this.tokenService.generateTokenPair(user.id, user.email, user.role as UserRole);
+    return this.tokenService.generateTokenPair(user.id, user.email, user.role as UserRole, meta);
   }
 
   // ─── Token refresh ────────────────────────────────────────────────────────────
@@ -95,8 +95,9 @@ export class AuthService {
   async refreshTokens(
     oldRefreshToken: string,
     payload: JwtRefreshPayload,
+    meta?: SessionMeta,
   ): Promise<IAuthTokens> {
-    return this.tokenService.rotateRefreshToken(oldRefreshToken, payload);
+    return this.tokenService.rotateRefreshToken(oldRefreshToken, payload, meta);
   }
 
   // ─── Logout (current session) ─────────────────────────────────────────────────
@@ -117,6 +118,19 @@ export class AuthService {
     await this.tokenService.revokeAllUserTokens(userId);
     this.messaging.publishEvent(AuthEventPatterns.USER_LOGGED_OUT, { userId });
     this.logger.log(`User logged out from all sessions: ${userId}`);
+  }
+
+  // ─── Session management ───────────────────────────────────────────────────────
+
+  async listSessions(userId: string): Promise<SessionView[]> {
+    return this.tokenService.listSessions(userId);
+  }
+
+  async revokeSession(sessionId: string, userId: string): Promise<void> {
+    const revoked = await this.tokenService.revokeSession(sessionId, userId);
+    if (!revoked) {
+      throw new NotFoundException('Session not found');
+    }
   }
 
   // ─── Change password ──────────────────────────────────────────────────────────

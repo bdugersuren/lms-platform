@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -26,6 +28,7 @@ import { IAuthTokens, JwtPayload, JwtRefreshPayload, UserRole } from '@lms/share
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtAuthGuard, RolesGuard, CurrentUser, Roles } from '@lms/shared-auth';
 import { AuthService } from './auth.service';
+import { SessionMeta } from './token.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -37,6 +40,8 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // ─── Auth ─────────────────────────────────────────────────────────────────────
+
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiTags('Auth')
@@ -46,27 +51,19 @@ export class AuthController {
     examples: {
       student: {
         summary: 'Register a student account',
-        value: {
-          email: 'student1@know.mn',
-          password: 'Student!1234',
-          role: 'STUDENT',
-        },
+        value: { email: 'student1@know.mn', password: 'Student!1234', role: 'STUDENT' },
       },
       instructor: {
         summary: 'Register an instructor account',
-        value: {
-          email: 'instructor1@know.mn',
-          password: 'Admin!1234',
-          role: 'INSTRUCTOR',
-        },
+        value: { email: 'instructor1@know.mn', password: 'Admin!1234', role: 'INSTRUCTOR' },
       },
     },
   })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 409, description: 'Email already exists' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  async register(@Body() dto: RegisterDto) {
-    const tokens = await this.authService.register(dto);
+  async register(@Body() dto: RegisterDto, @Req() req: Request) {
+    const tokens = await this.authService.register(dto, this.extractMeta(req));
     return ApiResponseBuilder.created(tokens, 'Registration successful');
   }
 
@@ -89,8 +86,8 @@ export class AuthController {
   })
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() dto: LoginDto) {
-    const tokens = await this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Req() req: Request) {
+    const tokens = await this.authService.login(dto, this.extractMeta(req));
     return ApiResponseBuilder.success(tokens, 'Login successful');
   }
 
@@ -114,7 +111,7 @@ export class AuthController {
     @Body() dto: RefreshTokenDto,
     @Req() req: Request & { user: JwtRefreshPayload },
   ) {
-    const tokens = await this.authService.refreshTokens(dto.refreshToken, req.user);
+    const tokens = await this.authService.refreshTokens(dto.refreshToken, req.user, this.extractMeta(req));
     return ApiResponseBuilder.success(tokens, 'Token refreshed successfully');
   }
 
@@ -123,7 +120,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiTags('Auth')
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Logout current session (revokes current access token)' })
+  @ApiOperation({ summary: 'Logout current session (revokes all refresh tokens)' })
   @ApiResponse({ status: 200, description: 'Logged out successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async logout(@Req() req: Request & { user: JwtPayload }) {
@@ -144,6 +141,42 @@ export class AuthController {
     await this.authService.logoutAll(user.sub);
     return ApiResponseBuilder.success(null, 'Logged out from all sessions');
   }
+
+  // ─── Session management ───────────────────────────────────────────────────────
+
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiTags('Sessions')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'List all active sessions for the current user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns active sessions with device, IP, and last-used info',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async listSessions(@CurrentUser() user: JwtPayload) {
+    const sessions = await this.authService.listSessions(user.sub);
+    return ApiResponseBuilder.success(sessions, 'Sessions retrieved');
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  @ApiTags('Sessions')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Revoke a specific session (logout one device)' })
+  @ApiParam({ name: 'id', description: 'Session UUID from GET /auth/sessions' })
+  @ApiResponse({ status: 204, description: 'Session revoked' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async revokeSession(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<void> {
+    await this.authService.revokeSession(id, user.sub);
+  }
+
+  // ─── Profile ──────────────────────────────────────────────────────────────────
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
@@ -168,10 +201,7 @@ export class AuthController {
     examples: {
       changePassword: {
         summary: 'Change current user password',
-        value: {
-          currentPassword: 'Student!1234',
-          newPassword: 'NewStudent!1234',
-        },
+        value: { currentPassword: 'Student!1234', newPassword: 'NewStudent!1234' },
       },
     },
   })
@@ -185,7 +215,7 @@ export class AuthController {
     return ApiResponseBuilder.success(null, 'Password changed successfully');
   }
 
-  // ─── Admin endpoints ─────────────────────────────────────────────────────────
+  // ─── Admin ────────────────────────────────────────────────────────────────────
 
   @Get('users')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -197,7 +227,6 @@ export class AuthController {
   @ApiQuery({ name: 'limit', required: false, example: 20 })
   @ApiQuery({ name: 'role', required: false, enum: UserRole })
   @ApiResponse({ status: 200, description: 'Users listed successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async listUsers(@Query() query: UserQueryDto) {
     const result = await this.authService.listUsers(query);
@@ -215,19 +244,12 @@ export class AuthController {
   @ApiBody({
     type: UpdateUserStatusDto,
     examples: {
-      deactivate: {
-        summary: 'Deactivate user',
-        value: { isActive: false },
-      },
-      activate: {
-        summary: 'Activate user',
-        value: { isActive: true },
-      },
+      deactivate: { summary: 'Deactivate user', value: { isActive: false } },
+      activate: { summary: 'Activate user', value: { isActive: true } },
     },
   })
   @ApiResponse({ status: 200, description: 'User status updated' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async updateUserStatus(
     @Param('id') id: string,
@@ -238,5 +260,14 @@ export class AuthController {
       null,
       dto.isActive ? 'User activated' : 'User deactivated',
     );
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+  private extractMeta(req: Request): SessionMeta {
+    return {
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    };
   }
 }

@@ -189,4 +189,22 @@ export class AnalyticsService {
     `;
     return result.map(r => ({ eventType: r.eventType, count: Number(r.count) }));
   }
+
+  // ── Ingestion health ───────────────────────────────────────────────────────
+
+  async getIngestionHealth() {
+    const since = new Date(Date.now() - 3_600_000); // last 1 hour
+    const [recentCount, latest] = await Promise.all([
+      this.prisma.analyticsEvent.count({ where: { occurredAt: { gte: since } } }),
+      this.prisma.analyticsEvent.findFirst({
+        orderBy: { occurredAt: 'desc' },
+        select: { occurredAt: true, eventType: true },
+      }),
+    ]);
+    return {
+      recentCount,
+      latestEventAt: latest?.occurredAt ?? null,
+      latestEventType: latest?.eventType ?? null,
+    };
+  }
 }

@@ -1,8 +1,7 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Get, Post, UseGuards, Headers, UnauthorizedException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiResponseBuilder } from '@lms/shared-utils';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { WalletService } from './wallet.service';
 import { ConfigService } from '@nestjs/config';
 

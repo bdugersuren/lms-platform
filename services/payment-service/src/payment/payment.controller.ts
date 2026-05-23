@@ -15,8 +15,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ApiResponseBuilder } from '@lms/shared-utils';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { PaymentService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { QueryPaymentDto } from './dto/query-payment.dto';

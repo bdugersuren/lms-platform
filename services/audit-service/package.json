@@ -1,0 +1,48 @@
+{
+  "name": "@lms/audit-service",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "start:dev": "nodemon --config ../../nodemon.svc.json",
+    "start:dev:once": "ts-node --transpile-only -r tsconfig-paths/register src/main.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@lms/shared-auth": "workspace:*",
+    "@lms/shared-config": "workspace:*",
+    "@lms/shared-types": "workspace:*",
+    "@lms/shared-utils": "workspace:*",
+    "@nestjs/common": "catalog:",
+    "@nestjs/config": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/platform-express": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "@nestjs/terminus": "catalog:",
+    "@prisma/client": "catalog:",
+    "prisma": "catalog:",
+    "class-transformer": "catalog:",
+    "class-validator": "catalog:",
+    "express": "catalog:",
+    "joi": "catalog:",
+    "nest-winston": "catalog:",
+    "passport": "catalog:",
+    "passport-jwt": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:",
+    "winston": "catalog:"
+  },
+  "devDependencies": {
+    "@types/express": "catalog:",
+    "@types/node": "catalog:",
+    "@types/passport-jwt": "catalog:",
+    "ts-node": "catalog:",
+    "tsconfig-paths": "catalog:",
+    "typescript": "catalog:",
+    "nodemon": "catalog:"
+  }
+}

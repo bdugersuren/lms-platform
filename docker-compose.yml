@@ -229,6 +229,22 @@ services:
       retries: 3
       start_period: 20s
 
+  mc-init:
+    image: minio/mc:RELEASE.2024-07-03T20-17-25Z
+    container_name: lms-mc-init
+    <<: *networks
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-lms-media}
+    volumes:
+      - ./infra/minio/init.sh:/init.sh:ro
+    entrypoint: ["/bin/sh", "/init.sh"]
+
   # ────────────────────────────────────────────────────────────────────────────
   # CORE  profile: core
   # Gateway + primary domain services. Minimum for a working API.
@@ -542,6 +558,25 @@ services:
       <<: *infra-depends
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3013/api/health"]
+      <<: *nestjs-healthcheck
+
+  audit-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/audit-service/Dockerfile
+    container_name: lms-audit-service
+    <<: *nestjs-common
+    profiles: [ops]
+    environment:
+      <<: *nestjs-env
+      PORT: ${AUDIT_PORT:-3015}
+      DATABASE_URL: ${AUDIT_DATABASE_URL}
+    ports:
+      - "127.0.0.1:3015:3015"
+    depends_on:
+      <<: *infra-depends
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3015/api/audit/health"]
       <<: *nestjs-healthcheck
 
   # ────────────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { NotificationChannel, NotificationType } from '@prisma/client';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { NotificationChannel, NotificationStatus, NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
@@ -16,6 +16,8 @@ export interface SendOptions {
 
 @Injectable()
 export class NotificationService {
+  private readonly logger = new Logger(NotificationService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
@@ -26,39 +28,86 @@ export class NotificationService {
   async send(opts: SendOptions): Promise<void> {
     const prefs = await this.getOrCreatePreferences(opts.userId);
 
-    // In-app always (if enabled)
+    // In-app: synchronous delivery — always SENT
     if (prefs.inApp) {
       await this.prisma.notification.create({
         data: {
           userId: opts.userId,
           type: opts.type ?? NotificationType.INFO,
           channel: NotificationChannel.IN_APP,
+          status: NotificationStatus.SENT,
+          title: opts.title,
+          body: opts.body,
+          metadata: opts.metadata as object ?? undefined,
+          lastAttemptAt: new Date(),
+        },
+      });
+    }
+
+    // Email: create PENDING, then update based on delivery result
+    if (prefs.email && opts.emailAddress) {
+      const notification = await this.prisma.notification.create({
+        data: {
+          userId: opts.userId,
+          type: opts.type ?? NotificationType.INFO,
+          channel: NotificationChannel.EMAIL,
+          status: NotificationStatus.PENDING,
           title: opts.title,
           body: opts.body,
           metadata: opts.metadata as object ?? undefined,
         },
       });
-    }
 
-    // Email (if enabled and address provided)
-    if (prefs.email && opts.emailAddress) {
-      await this.email.send({
+      const result = await this.email.send({
         to: opts.emailAddress,
         subject: opts.title,
         html: this.email.buildNotificationHtml(opts.title, opts.body),
       });
 
-      await this.prisma.notification.create({
-        data: {
-          userId: opts.userId,
-          type: opts.type ?? NotificationType.INFO,
-          channel: NotificationChannel.EMAIL,
-          title: opts.title,
-          body: opts.body,
-          metadata: opts.metadata as object ?? undefined,
-        },
+      await this.prisma.notification.update({
+        where: { id: notification.id },
+        data: result.success
+          ? { status: NotificationStatus.SENT, providerMessageId: result.providerMessageId, lastAttemptAt: new Date() }
+          : { status: NotificationStatus.FAILED, failureReason: result.failureReason, retryCount: { increment: 1 }, lastAttemptAt: new Date() },
       });
+
+      if (!result.success) {
+        this.logger.warn(`Email delivery failed for user ${opts.userId}: ${result.failureReason}`);
+      }
     }
+  }
+
+  // ─── Retry failed notifications (called by RetryService) ─────────────────
+
+  async retryFailed(): Promise<number> {
+    const MAX_RETRY = 3;
+    const failed = await this.prisma.notification.findMany({
+      where: { status: NotificationStatus.FAILED, retryCount: { lt: MAX_RETRY } },
+      take: 50,
+    });
+
+    let retried = 0;
+    for (const notif of failed) {
+      if (notif.channel === NotificationChannel.EMAIL && notif.metadata) {
+        const emailAddress = (notif.metadata as Record<string, unknown>)['emailAddress'] as string | undefined;
+        if (!emailAddress) continue;
+
+        const result = await this.email.send({
+          to: emailAddress,
+          subject: notif.title,
+          html: this.email.buildNotificationHtml(notif.title, notif.body),
+        });
+
+        await this.prisma.notification.update({
+          where: { id: notif.id },
+          data: result.success
+            ? { status: NotificationStatus.SENT, providerMessageId: result.providerMessageId, lastAttemptAt: new Date() }
+            : { status: NotificationStatus.FAILED, failureReason: result.failureReason, retryCount: { increment: 1 }, lastAttemptAt: new Date() },
+        });
+        retried++;
+      }
+    }
+    return retried;
   }
 
   // ─── Admin / internal create ──────────────────────────────────────────────

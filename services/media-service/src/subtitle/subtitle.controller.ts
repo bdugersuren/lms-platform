@@ -17,8 +17,7 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiTags } 
 import { memoryStorage } from 'multer';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtPayload } from '@lms/shared-types';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { SubtitleService } from './subtitle.service';
 
 @ApiTags('Subtitles')

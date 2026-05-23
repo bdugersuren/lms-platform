@@ -1,15 +1,31 @@
-import { AuthEventPatterns, EventTypes } from '@lms/shared-types';
+import { AuthEventPatterns, CourseEventPatterns, EventTypes } from '@lms/shared-types';
 
 export const ANALYTICS_RABBITMQ_CLIENT = 'ANALYTICS_RABBITMQ_CLIENT';
 
 export const TRACKED_EVENTS = {
+  // Auth
   USER_REGISTERED:  AuthEventPatterns.USER_REGISTERED,
+  USER_LOGGED_IN:   AuthEventPatterns.USER_LOGGED_IN,
+  // Enrollment
   ENROLLMENT_CREATED:   EventTypes.ENROLLMENT_CREATED,
   ENROLLMENT_COMPLETED: EventTypes.ENROLLMENT_COMPLETED,
+  LESSON_COMPLETED:     EventTypes.LESSON_COMPLETED,
+  // Payment
   PAYMENT_CONFIRMED:    EventTypes.PAYMENT_CONFIRMED,
   PAYMENT_FAILED:       EventTypes.PAYMENT_FAILED,
-  QUIZ_COMPLETED:       EventTypes.QUIZ_ATTEMPT_SUBMITTED,
-  ASSIGNMENT_GRADED:    EventTypes.ASSIGNMENT_SUBMISSION_GRADED,
-  MEDIA_UPLOADED:       EventTypes.MEDIA_FILE_UPLOADED,
+  // Quiz / Assignment
+  QUIZ_COMPLETED:            EventTypes.QUIZ_ATTEMPT_SUBMITTED,
+  ASSIGNMENT_GRADED:         EventTypes.ASSIGNMENT_SUBMISSION_GRADED,
+  ASSIGNMENT_SUBMITTED:      EventTypes.ASSIGNMENT_SUBMISSION_SUBMITTED,
+  // Certificate
   CERTIFICATE_ISSUED:   EventTypes.CERTIFICATE_ISSUED,
+  CERTIFICATE_REVOKED:  EventTypes.CERTIFICATE_REVOKED,
+  // Wallet
+  WALLET_REVENUE_DISTRIBUTED: EventTypes.WALLET_REVENUE_DISTRIBUTED,
+  // Media
+  MEDIA_UPLOADED:       EventTypes.MEDIA_FILE_UPLOADED,
+  // Course lifecycle
+  COURSE_CREATED:    CourseEventPatterns.CREATED,
+  COURSE_PUBLISHED:  CourseEventPatterns.PUBLISHED,
+  COURSE_ARCHIVED:   CourseEventPatterns.ARCHIVED,
 } as const;

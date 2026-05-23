@@ -7,6 +7,20 @@ import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 
+export interface SessionMeta {
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export interface SessionView {
+  id: string;
+  deviceName: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  lastUsedAt: Date | null;
+  createdAt: Date;
+}
+
 @Injectable()
 export class TokenService {
   private readonly logger = new Logger(TokenService.name);
@@ -22,6 +36,7 @@ export class TokenService {
     userId: string,
     email: string,
     role: UserRole,
+    meta?: SessionMeta,
   ): Promise<IAuthTokens> {
     const jti = uuidv4();
     const tokenId = uuidv4();
@@ -31,11 +46,11 @@ export class TokenService {
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(accessPayload, {
-        secret: this.config.get<string>('jwt.secret'),
+        secret: this.config.getOrThrow<string>('jwt.secret'),
         expiresIn: this.config.get<string>('jwt.expiresIn', '15m'),
       }),
       this.jwt.signAsync(refreshPayload, {
-        secret: this.config.get<string>('jwt.refreshSecret'),
+        secret: this.config.getOrThrow<string>('jwt.refreshSecret'),
         expiresIn: this.config.get<string>('jwt.refreshExpiresIn', '7d'),
       }),
     ]);
@@ -44,7 +59,15 @@ export class TokenService {
     const expiresAt = this.computeRefreshExpiry();
 
     await this.prisma.refreshToken.create({
-      data: { userId, tokenHash, expiresAt },
+      data: {
+        userId,
+        tokenId,
+        tokenHash,
+        expiresAt,
+        ipAddress: meta?.ipAddress,
+        userAgent: meta?.userAgent,
+        deviceName: meta ? this.parseDeviceName(meta.userAgent) : null,
+      },
     });
 
     const expiresIn = this.parseExpiresIn(
@@ -57,6 +80,7 @@ export class TokenService {
   async rotateRefreshToken(
     oldRefreshToken: string,
     payload: JwtRefreshPayload,
+    meta?: SessionMeta,
   ): Promise<IAuthTokens> {
     const stored = await this.prisma.refreshToken.findMany({
       where: {
@@ -79,8 +103,6 @@ export class TokenService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    await this.prisma.refreshToken.delete({ where: { id: matchedRecord.id } });
-
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: { id: true, email: true, role: true, isActive: true },
@@ -90,7 +112,69 @@ export class TokenService {
       throw new UnauthorizedException('User account is disabled');
     }
 
-    return this.generateTokenPair(user.id, user.email, user.role as UserRole);
+    // Issue new tokens
+    const jti = uuidv4();
+    const newTokenId = uuidv4();
+    const accessPayload: JwtPayload = { sub: user.id, email: user.email, role: user.role as UserRole, jti };
+    const refreshPayload: JwtRefreshPayload = { sub: user.id, tokenId: newTokenId };
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwt.signAsync(accessPayload, {
+        secret: this.config.getOrThrow<string>('jwt.secret'),
+        expiresIn: this.config.get<string>('jwt.expiresIn', '15m'),
+      }),
+      this.jwt.signAsync(refreshPayload, {
+        secret: this.config.getOrThrow<string>('jwt.refreshSecret'),
+        expiresIn: this.config.get<string>('jwt.refreshExpiresIn', '7d'),
+      }),
+    ]);
+
+    const newTokenHash = await hashPassword(refreshToken);
+    const expiresAt = this.computeRefreshExpiry();
+
+    // Update the existing session record — keeps session id stable, updates lastUsedAt
+    await this.prisma.refreshToken.update({
+      where: { id: matchedRecord.id },
+      data: {
+        tokenId: newTokenId,
+        tokenHash: newTokenHash,
+        expiresAt,
+        lastUsedAt: new Date(),
+        ...(meta?.ipAddress && { ipAddress: meta.ipAddress }),
+        ...(meta?.userAgent && {
+          userAgent: meta.userAgent,
+          deviceName: this.parseDeviceName(meta.userAgent),
+        }),
+      },
+    });
+
+    const expiresIn = this.parseExpiresIn(
+      this.config.get<string>('jwt.expiresIn', '15m'),
+    );
+
+    return { accessToken, refreshToken, expiresIn, tokenType: 'Bearer' };
+  }
+
+  async listSessions(userId: string): Promise<SessionView[]> {
+    return this.prisma.refreshToken.findMany({
+      where: { userId, expiresAt: { gt: new Date() } },
+      select: {
+        id: true,
+        deviceName: true,
+        ipAddress: true,
+        userAgent: true,
+        lastUsedAt: true,
+        createdAt: true,
+      },
+      orderBy: { lastUsedAt: { sort: 'desc', nulls: 'last' } },
+    });
+  }
+
+  async revokeSession(sessionId: string, userId: string): Promise<boolean> {
+    const result = await this.prisma.refreshToken.deleteMany({
+      where: { id: sessionId, userId },
+    });
+    return result.count > 0;
   }
 
   async revokeAccessToken(jti: string, accessToken: string): Promise<void> {
@@ -115,9 +199,27 @@ export class TokenService {
       this.config.get<string>('jwt.expiresIn', '15m'),
     );
     const key = this.redis.buildUserBlacklistKey(userId);
-    // Store the revocation timestamp so only tokens issued BEFORE this time are rejected.
-    // Tokens issued after (e.g. after a new login) will have iat > this value and are accepted.
     await this.redis.set(key, String(Math.floor(Date.now() / 1000)), jwtTtl);
+  }
+
+  private parseDeviceName(userAgent?: string): string | null {
+    if (!userAgent) return null;
+    if (/postman/i.test(userAgent)) return 'Postman';
+    if (/insomnia/i.test(userAgent)) return 'Insomnia';
+    if (/iPhone/i.test(userAgent)) return 'iPhone';
+    if (/iPad/i.test(userAgent)) return 'iPad';
+    if (/Android/i.test(userAgent)) return 'Android';
+    const os = /Windows NT/i.test(userAgent) ? 'Windows'
+      : /Mac OS X/i.test(userAgent) ? 'Mac'
+      : /Linux/i.test(userAgent) ? 'Linux'
+      : null;
+    const browser = /Edg\//i.test(userAgent) ? 'Edge'
+      : /Chrome\//i.test(userAgent) ? 'Chrome'
+      : /Firefox\//i.test(userAgent) ? 'Firefox'
+      : /Safari\//i.test(userAgent) ? 'Safari'
+      : null;
+    if (browser && os) return `${browser} on ${os}`;
+    return browser ?? os ?? 'Unknown device';
   }
 
   private computeRefreshExpiry(): Date {

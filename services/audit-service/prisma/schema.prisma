@@ -1,0 +1,33 @@
+// Audit Service — Prisma Schema
+// Database: audit_db
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  actorId       String   @map("actor_id")
+  actorEmail    String   @map("actor_email")
+  actorRole     String   @map("actor_role")
+  method        String
+  path          String
+  service       String
+  statusCode    Int      @map("status_code")
+  success       Boolean
+  ip            String
+  userAgent     String   @map("user_agent")
+  correlationId String   @map("correlation_id")
+  occurredAt    DateTime @map("occurred_at")
+
+  @@index([actorId])
+  @@index([occurredAt])
+  @@index([path])
+  @@index([service])
+  @@map("audit_logs")
+}

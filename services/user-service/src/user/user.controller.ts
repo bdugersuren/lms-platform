@@ -18,8 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtPayload } from '@lms/shared-types';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { UserService } from './user.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 

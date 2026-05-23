@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
+import { createWriteStream } from 'fs';
+import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
 import { MediaType } from '@prisma/client';
 
@@ -102,6 +104,30 @@ export class MinioService implements OnModuleInit {
 
   async presign(key: string): Promise<string> {
     return this.client.presignedGetObject(this.bucket, key, this.presignExpires);
+  }
+
+  async presignedPutObject(key: string, expiresSeconds?: number): Promise<string> {
+    const expires = expiresSeconds ?? this.presignExpires;
+    return this.client.presignedPutObject(this.bucket, key, expires);
+  }
+
+  async downloadToFile(key: string, destPath: string): Promise<void> {
+    const stream = await this.client.getObject(this.bucket, key);
+    await pipeline(stream as Readable, createWriteStream(destPath));
+  }
+
+  async uploadFile(srcPath: string, key: string, mimeType: string): Promise<string> {
+    const { createReadStream, statSync } = await import('fs');
+    const { size } = statSync(srcPath);
+    const stream = createReadStream(srcPath);
+    await this.client.putObject(this.bucket, key, stream, size, { 'Content-Type': mimeType });
+    return `${this.publicUrl}/${this.bucket}/${key}`;
+  }
+
+  async uploadBuffer(buffer: Buffer, key: string, mimeType: string): Promise<string> {
+    const stream = Readable.from(buffer);
+    await this.client.putObject(this.bucket, key, stream, buffer.length, { 'Content-Type': mimeType });
+    return `${this.publicUrl}/${this.bucket}/${key}`;
   }
 
   async delete(key: string): Promise<void> {

@@ -28,11 +28,23 @@ export class EssayScoreService {
   async score(userId: string, dto: ScoreEssayDto) {
     const maxScore = dto.maxScore ?? 100;
 
+    // Load custom rubric if provided
+    let rubricInstruction = '';
+    if (dto.rubricId) {
+      const rubric = await this.prisma.essayRubric.findUnique({ where: { id: dto.rubricId } });
+      if (rubric) {
+        const criteria = rubric.criteria as Array<{ name: string; description?: string; maxScore: number }>;
+        const totalMax = criteria.reduce((sum, c) => sum + c.maxScore, 0);
+        rubricInstruction = `\nUse this custom rubric (total ${totalMax} points):\n` +
+          criteria.map((c) => `- ${c.name}${c.description ? ` (${c.description})` : ''}: 0-${c.maxScore}`).join('\n');
+      }
+    }
+
     const systemPrompt = `You are an expert academic essay evaluator.
 Score essays objectively based on: content quality, structure, language use, and argumentation.
 Always respond with valid JSON only — no markdown, no explanation outside JSON.`;
 
-    const userPrompt = `Evaluate this essay${dto.prompt ? ` written in response to: "${dto.prompt}"` : ''}.
+    const userPrompt = `Evaluate this essay${dto.prompt ? ` written in response to: "${dto.prompt}"` : ''}.${rubricInstruction}
 
 Essay:
 """

@@ -9,6 +9,6 @@ import { CourseProjectionModule } from '../course-projection/course-projection.m
   imports: [CourseProjectionModule],
   controllers: [EnrollmentController, ProgressController],
   providers: [EnrollmentService, ProgressService],
-  exports: [EnrollmentService],
+  exports: [EnrollmentService, ProgressService],
 })
 export class EnrollmentModule {}

@@ -70,3 +70,31 @@ model Recommendation {
   @@index([userId])
   @@map("recommendations")
 }
+
+model AiInteractionLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  service    String   // TUTOR | ESSAY_SCORE | RECOMMENDATION
+  durationMs Int      @map("duration_ms")
+  success    Boolean
+  errorMsg   String?  @map("error_msg")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([service])
+  @@index([createdAt])
+  @@map("ai_interaction_logs")
+}
+
+model EssayRubric {
+  id           String   @id @default(uuid())
+  name         String
+  assignmentId String?  @unique @map("assignment_id")
+  criteria     Json     // { name: string, description?: string, maxScore: number }[]
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdBy    String   @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([assignmentId])
+  @@map("essay_rubrics")
+}

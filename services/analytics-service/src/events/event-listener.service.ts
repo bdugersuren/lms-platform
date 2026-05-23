@@ -69,4 +69,44 @@ export class EventListenerService {
   async onCertificateIssued(@Payload() p: Record<string, unknown>) {
     await this.ingest(TRACKED_EVENTS.CERTIFICATE_ISSUED, p);
   }
+
+  @EventPattern(TRACKED_EVENTS.USER_LOGGED_IN)
+  async onUserLoggedIn(@Payload() p: Record<string, unknown>) {
+    await this.ingest(TRACKED_EVENTS.USER_LOGGED_IN, p);
+  }
+
+  @EventPattern(TRACKED_EVENTS.LESSON_COMPLETED)
+  async onLessonCompleted(@Payload() p: Record<string, unknown>) {
+    await this.ingest(TRACKED_EVENTS.LESSON_COMPLETED, p);
+  }
+
+  @EventPattern(TRACKED_EVENTS.ASSIGNMENT_SUBMITTED)
+  async onAssignmentSubmitted(@Payload() p: Record<string, unknown>) {
+    await this.ingest(TRACKED_EVENTS.ASSIGNMENT_SUBMITTED, p);
+  }
+
+  @EventPattern(TRACKED_EVENTS.CERTIFICATE_REVOKED)
+  async onCertificateRevoked(@Payload() p: Record<string, unknown>) {
+    await this.ingest(TRACKED_EVENTS.CERTIFICATE_REVOKED, p);
+  }
+
+  @EventPattern(TRACKED_EVENTS.WALLET_REVENUE_DISTRIBUTED)
+  async onWalletRevenueDistributed(@Payload() p: Record<string, unknown>) {
+    await this.ingest(TRACKED_EVENTS.WALLET_REVENUE_DISTRIBUTED, p);
+  }
+
+  @EventPattern(TRACKED_EVENTS.COURSE_CREATED)
+  async onCourseCreated(@Payload() p: Record<string, unknown>) {
+    await this.ingest(TRACKED_EVENTS.COURSE_CREATED, p);
+  }
+
+  @EventPattern(TRACKED_EVENTS.COURSE_PUBLISHED)
+  async onCoursePublished(@Payload() p: Record<string, unknown>) {
+    await this.ingest(TRACKED_EVENTS.COURSE_PUBLISHED, p);
+  }
+
+  @EventPattern(TRACKED_EVENTS.COURSE_ARCHIVED)
+  async onCourseArchived(@Payload() p: Record<string, unknown>) {
+    await this.ingest(TRACKED_EVENTS.COURSE_ARCHIVED, p);
+  }
 }

@@ -25,4 +25,9 @@ export class ScoreEssayDto {
   @Min(10)
   @Max(1000)
   maxScore?: number;
+
+  @ApiPropertyOptional({ description: 'Custom rubric ID (teacher-configured)' })
+  @IsOptional()
+  @IsUUID()
+  rubricId?: string;
 }

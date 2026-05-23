@@ -13,7 +13,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     super({
       jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('jwt.refreshSecret'),
+      secretOrKey: config.getOrThrow<string>('jwt.refreshSecret'),
     });
   }
 

@@ -23,6 +23,10 @@ export const EventTypes = {
   MEDIA_FILE_UPLOADED:             'media.file.uploaded',
   MEDIA_FILE_DELETED:              'media.file.deleted',
   MEDIA_TRANSCODE_QUEUED:          'media.transcode.queued',
+  MEDIA_TRANSCODE_COMPLETED:       'media.transcode.completed',
+  MEDIA_TRANSCODE_FAILED:          'media.transcode.failed',
+  // Audit
+  AUDIT_ACTION_PERFORMED:          'audit.action.performed',
 } as const;
 
 export type EventType = (typeof EventTypes)[keyof typeof EventTypes];

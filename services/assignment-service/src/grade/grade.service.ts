@@ -68,6 +68,7 @@ export class GradeService {
       submissionId,
       assignmentId: submission.assignmentId,
       studentId: submission.studentId,
+      courseId: assignment.courseId,
       score: dto.score,
       maxScore: assignment.maxScore,
       passed,

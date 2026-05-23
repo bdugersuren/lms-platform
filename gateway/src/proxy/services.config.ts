@@ -13,6 +13,7 @@ export const SERVICE_ROUTES: Record<string, string | undefined> = {
   media: process.env.MEDIA_SERVICE_URL,
   certificates: process.env.CERTIFICATE_SERVICE_URL,
   analytics: process.env.ANALYTICS_SERVICE_URL,
+  audit: process.env.AUDIT_SERVICE_URL,
 } as const;
 
 export type ServiceKey = keyof typeof SERVICE_ROUTES;

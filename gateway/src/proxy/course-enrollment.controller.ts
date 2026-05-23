@@ -11,6 +11,7 @@ import { ApiExcludeController } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { lastValueFrom } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
+import * as qs from 'qs';
 
 /**
  * Intercepts enrollment/progress operations that are routed under /courses/:courseId
@@ -70,8 +71,11 @@ export class CourseEnrollmentController {
   private async forward(
     req: FastifyRequest,
     reply: FastifyReply,
-    url: string,
+    targetUrl: string,
   ): Promise<void> {
+    const queryString = qs.stringify(req.query, { encode: false, arrayFormat: 'repeat' });
+    const url = queryString ? `${targetUrl}?${queryString}` : targetUrl;
+
     const forwardHeaders: Record<string, string> = {
       'content-type': (req.headers['content-type'] as string) ?? 'application/json',
       'x-correlation-id': (req.headers['x-correlation-id'] as string) ?? '',

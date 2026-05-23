@@ -8,7 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard } from '@lms/shared-auth';
 import { EventFailureService } from '../event-failure/event-failure.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ApiResponseBuilder } from '@lms/shared-utils';

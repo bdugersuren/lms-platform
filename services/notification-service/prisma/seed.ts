@@ -1,4 +1,4 @@
-import { PrismaClient, NotificationType, NotificationChannel, NotificationStatus } from '@prisma/client';
+import { PrismaClient, NotificationType, NotificationChannel, NotificationStatus, NotificationTemplate } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -137,6 +137,68 @@ async function main() {
     });
   }
   console.log(`  ✓ ${notifications.length} notifications`);
+
+  // ── Notification Templates ────────────────────────────────────────────────
+  const templates: Omit<NotificationTemplate, 'id' | 'createdAt' | 'updatedAt'>[] = [
+    {
+      type: NotificationType.COURSE_ENROLLED,
+      channel: NotificationChannel.EMAIL,
+      subject: '{{courseName}} сургалтад бүртгэгдлэв',
+      bodyText: 'Та {{courseName}} сургалтад амжилттай бүртгэгдлээ. Платформ дээрх сургалтандаа нэвтэрч сурахаа эхлэцгээе!',
+      bodyHtml: '<h2>Сургалтад тавтай морил!</h2><p>Та <strong>{{courseName}}</strong> сургалтад амжилттай бүртгэгдлээ.</p><p>Платформ дээрх сургалтандаа нэвтэрч сурахаа эхлэцгээе!</p>',
+    },
+    {
+      type: NotificationType.ASSIGNMENT_GRADED,
+      channel: NotificationChannel.EMAIL,
+      subject: '{{assignmentTitle}} - дүн гарлаа: {{score}}/{{maxScore}}',
+      bodyText: '"{{assignmentTitle}}" даалгаврын дүн гарлаа: {{score}}/{{maxScore}} ({{percent}}%). Дэлгэрэнгүйг платформоос харна уу.',
+      bodyHtml: '<h2>Даалгаврын дүн</h2><p><strong>{{assignmentTitle}}</strong> даалгаврын дүн: <strong>{{score}}/{{maxScore}}</strong> ({{percent}}%)</p>',
+    },
+    {
+      type: NotificationType.QUIZ_RESULT,
+      channel: NotificationChannel.EMAIL,
+      subject: '{{quizTitle}} - тест дүн: {{score}}',
+      bodyText: '"{{quizTitle}}" тестийн дүн: {{score}} оноо. {{passedText}}',
+      bodyHtml: '<h2>Тестийн дүн</h2><p><strong>{{quizTitle}}</strong>: {{score}} оноо</p><p>{{passedText}}</p>',
+    },
+    {
+      type: NotificationType.PAYMENT_CONFIRMED,
+      channel: NotificationChannel.EMAIL,
+      subject: 'Төлбөр баталгаажлаа — {{amount}} {{currency}}',
+      bodyText: '{{amount}} {{currency}} төлбөр амжилттай хийгдлээ. Гүйлгээний дугаар: {{paymentId}}',
+      bodyHtml: '<h2>Төлбөр баталгаажлаа</h2><p>Дүн: <strong>{{amount}} {{currency}}</strong></p><p>Гүйлгээний дугаар: {{paymentId}}</p>',
+    },
+    {
+      type: NotificationType.PAYMENT_FAILED,
+      channel: NotificationChannel.EMAIL,
+      subject: 'Төлбөр амжилтгүй болов',
+      bodyText: '{{amount}} {{currency}} төлбөр амжилтгүй болов. Шалтгаан: {{reason}}. Дахин оролдоно уу.',
+      bodyHtml: '<h2>Төлбөр амжилтгүй</h2><p>Дүн: {{amount}} {{currency}}</p><p>Шалтгаан: {{reason}}</p><p>Дахин оролдоно уу.</p>',
+    },
+    {
+      type: NotificationType.SUCCESS,
+      channel: NotificationChannel.EMAIL,
+      subject: '{{title}}',
+      bodyText: '{{body}}',
+      bodyHtml: '<h2>{{title}}</h2><p>{{body}}</p>',
+    },
+    {
+      type: NotificationType.INFO,
+      channel: NotificationChannel.EMAIL,
+      subject: '{{title}}',
+      bodyText: '{{body}}',
+      bodyHtml: '<h2>{{title}}</h2><p>{{body}}</p>',
+    },
+  ];
+
+  for (const tmpl of templates) {
+    await (prisma as unknown as { notificationTemplate: { upsert: (args: object) => Promise<unknown> } }).notificationTemplate.upsert({
+      where: { type_channel: { type: tmpl.type, channel: tmpl.channel } },
+      update: { subject: tmpl.subject, bodyText: tmpl.bodyText, bodyHtml: tmpl.bodyHtml },
+      create: tmpl,
+    });
+  }
+  console.log(`  ✓ ${templates.length} notification templates`);
 }
 
 main()

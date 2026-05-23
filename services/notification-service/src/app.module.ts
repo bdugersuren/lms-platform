@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule } from '@nestjs/config';
 import Joi from 'joi';
 import { appConfig, databaseConfig, jwtConfig, rabbitmqConfig } from '@lms/shared-config';
@@ -32,6 +33,7 @@ import { EventListenerModule } from './events/event-listener.module';
       validationOptions: { allowUnknown: true, abortEarly: false },
     }),
 
+    ScheduleModule.forRoot(),
     PrismaModule,
     MessagingModule,
     EmailModule,

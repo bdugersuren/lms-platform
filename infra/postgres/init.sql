@@ -42,6 +42,9 @@ CREATE DATABASE certificate_db;
 -- Analytics Service
 CREATE DATABASE analytics_db;
 
+-- Audit Service
+CREATE DATABASE audit_db;
+
 -- Grant the lms user full access to all databases
 GRANT ALL PRIVILEGES ON DATABASE auth_db TO lms;
 GRANT ALL PRIVILEGES ON DATABASE user_db TO lms;
@@ -56,3 +59,4 @@ GRANT ALL PRIVILEGES ON DATABASE notification_db TO lms;
 GRANT ALL PRIVILEGES ON DATABASE media_db TO lms;
 GRANT ALL PRIVILEGES ON DATABASE certificate_db TO lms;
 GRANT ALL PRIVILEGES ON DATABASE analytics_db TO lms;
+GRANT ALL PRIVILEGES ON DATABASE audit_db TO lms;

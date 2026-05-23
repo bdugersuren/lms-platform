@@ -19,11 +19,11 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiTags } 
 import { memoryStorage } from 'multer';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtPayload } from '@lms/shared-types';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { MediaService } from './media.service';
 import { UpdateMediaDto } from './dto/update-media.dto';
 import { QueryMediaDto } from './dto/query-media.dto';
+import { PresignUploadDto } from './dto/presign-upload.dto';
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
 
@@ -33,6 +33,23 @@ const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
 @Controller('media')
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
+
+  @Post('presign-upload')
+  @ApiOperation({ summary: 'Request a presigned PUT URL for direct browser-to-MinIO upload' })
+  async presignUpload(@CurrentUser() user: JwtPayload, @Body() dto: PresignUploadDto) {
+    const data = await this.mediaService.createPresignedUpload(user.sub, dto);
+    return ApiResponseBuilder.success(data, 'Presigned upload URL generated');
+  }
+
+  @Post('finalize/:key(*)')
+  @ApiOperation({ summary: 'Finalize a direct upload after browser PUT to MinIO completes' })
+  async finalizeUpload(
+    @CurrentUser() user: JwtPayload,
+    @Param('key') key: string,
+  ) {
+    const data = await this.mediaService.finalizeUpload(user.sub, key);
+    return ApiResponseBuilder.success(data, 'Upload finalized');
+  }
 
   @Post('files')
   @ApiOperation({ summary: 'Upload a file to MinIO and register metadata' })

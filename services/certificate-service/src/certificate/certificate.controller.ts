@@ -5,8 +5,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, UserRole } from '@lms/shared-types';
 import { ApiResponseBuilder } from '@lms/shared-utils';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard, RolesGuard, Roles, CurrentUser } from '@lms/shared-auth';
 import { CertificateService } from './certificate.service';
 import { CreateCertificateDto } from './dto/create-certificate.dto';
 import { QueryCertificateDto } from './dto/query-certificate.dto';
@@ -28,14 +27,11 @@ export class CertificateController {
   // ── Protected routes ──────────────────────────────────────────────────────
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.INSTRUCTOR)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Issue a new certificate (admin/instructor)' })
-  async issue(@Body() dto: CreateCertificateDto, @CurrentUser() user: JwtPayload) {
-    const allowedRoles: string[] = [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.INSTRUCTOR];
-    if (!allowedRoles.includes(user.role)) {
-      return ApiResponseBuilder.success(null, 'Forbidden');
-    }
+  async issue(@Body() dto: CreateCertificateDto) {
     const data = await this.service.issue(dto);
     return ApiResponseBuilder.success(data, 'Certificate issued successfully');
   }
@@ -61,12 +57,11 @@ export class CertificateController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Revoke a certificate (admin only)' })
-  async revoke(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload): Promise<void> {
-    const allowedRoles: string[] = [UserRole.ADMIN, UserRole.SUPER_ADMIN];
-    if (!allowedRoles.includes(user.role)) return;
+  async revoke(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.service.revoke(id);
   }
 }

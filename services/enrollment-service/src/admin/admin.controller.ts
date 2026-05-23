@@ -9,7 +9,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/jwt.guard';
+import { JwtAuthGuard } from '@lms/shared-auth';
 import { ProjectionRebuildService } from '../course-projection/projection-rebuild.service';
 import { MigrationService } from './migration.service';
 import { EventFailureService } from '../event-failure/event-failure.service';

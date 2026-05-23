@@ -38,21 +38,40 @@ enum NotificationStatus {
 }
 
 model Notification {
-  id        String              @id @default(uuid())
-  userId    String              @map("user_id")
-  type      NotificationType    @default(INFO)
-  channel   NotificationChannel @default(IN_APP)
-  status    NotificationStatus  @default(SENT)
-  title     String
-  body      String
-  metadata  Json?
-  isRead    Boolean             @default(false) @map("is_read")
-  readAt    DateTime?           @map("read_at")
-  createdAt DateTime            @default(now()) @map("created_at")
+  id                String              @id @default(uuid())
+  userId            String              @map("user_id")
+  type              NotificationType    @default(INFO)
+  channel           NotificationChannel @default(IN_APP)
+  status            NotificationStatus  @default(PENDING)
+  title             String
+  body              String
+  metadata          Json?
+  providerMessageId String?             @map("provider_message_id")
+  failureReason     String?             @map("failure_reason")
+  retryCount        Int                 @default(0) @map("retry_count")
+  lastAttemptAt     DateTime?           @map("last_attempt_at")
+  isRead            Boolean             @default(false) @map("is_read")
+  readAt            DateTime?           @map("read_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
 
   @@index([userId, isRead])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([status, retryCount])
   @@map("notifications")
+}
+
+model NotificationTemplate {
+  id        String              @id @default(uuid())
+  type      NotificationType
+  channel   NotificationChannel
+  subject   String
+  bodyText  String              @map("body_text")
+  bodyHtml  String?             @map("body_html")
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
+
+  @@unique([type, channel])
+  @@map("notification_templates")
 }
 
 model NotificationPreference {

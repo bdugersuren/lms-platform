@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -10,6 +11,7 @@ import { HealthModule } from './health/health.module';
 import { ProxyModule } from './proxy/proxy.module';
 import { GatewayAuthModule } from './auth/auth.module';
 import { MediaModule } from './media/media.module';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
   imports: [
@@ -63,6 +65,12 @@ import { MediaModule } from './media/media.module';
     MediaModule,
     HealthModule,
     ProxyModule,
+  ],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
+    },
   ],
 })
 export class AppModule {}

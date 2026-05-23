@@ -13,14 +13,15 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtPayload } from '@lms/shared-types';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { AiTutorService } from './ai-tutor.service';
 import { CreateSessionDto, SendMessageDto } from './dto/chat.dto';
+import { AiRateLimit } from '../common/guards/ai-rate-limit.decorator';
+import { AiRateLimitGuard } from '../common/guards/ai-rate-limit.guard';
 
 @ApiTags('AI Tutor')
 @ApiBearerAuth('access-token')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, AiRateLimitGuard)
 @Controller('ai/tutor')
 export class AiTutorController {
   constructor(private readonly tutorService: AiTutorService) {}
@@ -54,6 +55,7 @@ export class AiTutorController {
   }
 
   @Post('sessions/:id/messages')
+  @AiRateLimit('TUTOR')
   @ApiOperation({ summary: 'Send message and get AI response' })
   async sendMessage(
     @CurrentUser() user: JwtPayload,
