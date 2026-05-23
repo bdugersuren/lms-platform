@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   useMyWallet,
@@ -11,19 +12,23 @@ import {
   useMyPayouts,
   useRequestPayout,
   useDevTopup,
+  useCreateTopup,
+  useCheckPayment,
 } from '@/hooks/use-wallet';
 import { clsx } from 'clsx';
-import type { TransactionType, PayoutStatus } from '@/types/wallet';
+import type { TransactionType, PayoutStatus, Payment, PaymentProvider } from '@/types/wallet';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 const TXMeta: Record<TransactionType, { icon: string; label: string; sign: '+' | '-' }> = {
-  CREDIT:       { icon: '💰', label: 'Орлого',          sign: '+' },
-  REVENUE_SHARE:{ icon: '📊', label: 'Орлогын хувь',    sign: '+' },
-  REFUND:       { icon: '↩️', label: 'Буцаалт',         sign: '+' },
-  DEBIT:        { icon: '💸', label: 'Зарцуулалт',      sign: '-' },
-  PAYOUT:       { icon: '🏦', label: 'Гадагш гаргалт',  sign: '-' },
-  PLATFORM_FEE: { icon: '🏛️', label: 'Платформ хураамж', sign: '-' },
+  CREDIT:           { icon: '💰', label: 'Орлого',           sign: '+' },
+  WALLET_TOPUP:     { icon: '⚡', label: 'Хэтэвч цэнэглэлт', sign: '+' },
+  REVENUE_SHARE:    { icon: '📊', label: 'Орлогын хувь',     sign: '+' },
+  REFUND:           { icon: '↩️', label: 'Буцаалт',          sign: '+' },
+  ADMIN_ADJUSTMENT: { icon: '🔧', label: 'Тохируулга',        sign: '+' },
+  DEBIT:            { icon: '💸', label: 'Зарцуулалт',       sign: '-' },
+  PAYOUT:           { icon: '🏦', label: 'Гадагш гаргалт',   sign: '-' },
+  PLATFORM_FEE:     { icon: '🏛️', label: 'Платформ хураамж',  sign: '-' },
 };
 
 const PayoutMeta: Record<PayoutStatus, { label: string; cls: string }> = {
@@ -50,6 +55,13 @@ export default function WalletPage() {
   const [payoutPage, setPayoutPage] = useState(1);
   const [revPage, setRevPage] = useState(1);
 
+  // Topup state
+  const [showTopupModal, setShowTopupModal] = useState(false);
+  const [topupAmount, setTopupAmount] = useState<number | ''>('');
+  const [topupProvider, setTopupProvider] = useState<PaymentProvider>('QPAY');
+  const [activePayment, setActivePayment] = useState<Payment | null>(null);
+  const [topupMsg, setTopupMsg] = useState('');
+
   const { data: wallet, isLoading: walletLoading, isError: walletError } = useMyWallet();
   const initWallet = useInitWallet();
   const { data: txData, isLoading: txLoading } = useTransactions(txPage);
@@ -57,10 +69,61 @@ export default function WalletPage() {
   const { data: revHistory } = useRevenueHistory(revPage);
   const { data: payoutData } = useMyPayouts(payoutPage);
   const requestPayout = useRequestPayout();
+  const createTopup = useCreateTopup();
+  const checkPayment = useCheckPayment();
+  const qc = useQueryClient();
 
   const devTopup = useDevTopup();
   const [devAmount, setDevAmount] = useState('');
   const [devMsg, setDevMsg] = useState('');
+
+  const handleTopupSubmit = async () => {
+    if (!topupAmount || topupAmount < 1000) {
+      setTopupMsg('Доод тал нь ₮1,000 оруулна уу.');
+      return;
+    }
+    setTopupMsg('');
+    createTopup.mutate(
+      { purpose: 'WALLET_TOPUP', amount: Number(topupAmount), provider: topupProvider },
+      {
+        onSuccess: (payment) => {
+          setActivePayment(payment);
+        },
+        onError: (err) => setTopupMsg(err.message),
+      },
+    );
+  };
+
+  const handleCheckPayment = () => {
+    if (!activePayment) return;
+    checkPayment.mutate(activePayment.id, {
+      onSuccess: (payment) => {
+        setActivePayment(payment);
+        if (payment.status === 'COMPLETED') {
+          setTopupMsg('Цэнэглэлт амжилттай боллоо!');
+          void qc.invalidateQueries({ queryKey: ['wallet'] });
+          setTimeout(() => {
+            setShowTopupModal(false);
+            setActivePayment(null);
+            setTopupAmount('');
+            setTopupMsg('');
+          }, 1500);
+        } else if (payment.status === 'FAILED' || payment.status === 'CANCELLED') {
+          setTopupMsg('Төлбөр амжилтгүй болсон. Дахин цэнэглэнэ үү.');
+        } else {
+          setTopupMsg('Төлбөр хүлээгдэж байна. Дахин шалгана уу.');
+        }
+      },
+      onError: (err) => setTopupMsg(err.message),
+    });
+  };
+
+  const closeTopupModal = () => {
+    setShowTopupModal(false);
+    setActivePayment(null);
+    setTopupAmount('');
+    setTopupMsg('');
+  };
 
   const handleDevTopup = (amount: number) => {
     setDevMsg('');
@@ -155,12 +218,20 @@ export default function WalletPage() {
                     {wallet.status === 'ACTIVE' ? '● Идэвхтэй' : wallet.status}
                   </span>
                   {wallet.status === 'ACTIVE' && (
-                    <button
-                      onClick={() => { setShowPayoutForm(true); setTab('payouts'); }}
-                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium transition-colors border border-white/20"
-                    >
-                      Мөнгө гаргах
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowTopupModal(true)}
+                        className="px-3 py-1.5 bg-white text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-50 transition-colors"
+                      >
+                        ⚡ Цэнэглэх
+                      </button>
+                      <button
+                        onClick={() => { setShowPayoutForm(true); setTab('payouts'); }}
+                        className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium transition-colors border border-white/20"
+                      >
+                        Мөнгө гаргах
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -236,6 +307,183 @@ export default function WalletPage() {
                 requestPayout={requestPayout}
                 walletBalance={wallet.balance}
               />
+            )}
+
+            {/* Topup modal */}
+            {showTopupModal && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+                onClick={(e) => { if (e.target === e.currentTarget) closeTopupModal(); }}
+              >
+                <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-bold text-gray-900">⚡ Хэтэвч цэнэглэх</h3>
+                    <button
+                      onClick={closeTopupModal}
+                      className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                    >×</button>
+                  </div>
+
+                  {!activePayment ? (
+                    <>
+                      {/* Preset amounts */}
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 mb-2">Дүн сонгох</p>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[10_000, 50_000, 100_000, 500_000].map((amt) => (
+                            <button
+                              key={amt}
+                              onClick={() => setTopupAmount(amt)}
+                              className={clsx(
+                                'py-2 rounded-lg text-xs font-semibold border transition-colors',
+                                topupAmount === amt
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'border-gray-200 text-gray-700 hover:border-indigo-400',
+                              )}
+                            >
+                              {(amt / 1000).toLocaleString()}к
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Custom amount */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Дурын дүн (₮)</label>
+                        <input
+                          type="number"
+                          min={1000}
+                          value={topupAmount}
+                          onChange={(e) => setTopupAmount(e.target.value ? Number(e.target.value) : '')}
+                          placeholder="50000"
+                          className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      {/* Provider */}
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 mb-2">Төлбөрийн арга</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['QPAY', 'SOCIAL_PAY'] as PaymentProvider[]).map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => setTopupProvider(p)}
+                              className={clsx(
+                                'py-2.5 rounded-lg text-sm font-semibold border transition-colors',
+                                topupProvider === p
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'border-gray-200 text-gray-700 hover:border-indigo-400',
+                              )}
+                            >
+                              {p === 'QPAY' ? 'QPay' : 'SocialPay'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {topupMsg && <p className="text-sm text-red-500">{topupMsg}</p>}
+
+                      <button
+                        onClick={handleTopupSubmit}
+                        disabled={!topupAmount || createTopup.isPending}
+                        className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                      >
+                        {createTopup.isPending ? 'Үүсгэж байна...' : `₮${Number(topupAmount || 0).toLocaleString('mn-MN')} цэнэглэх`}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* QR / checkout */}
+                      {activePayment.status === 'COMPLETED' ? (
+                        <div className="text-center py-6">
+                          <p className="text-4xl mb-3">✅</p>
+                          <p className="font-semibold text-gray-900">Амжилттай цэнэглэгдлээ!</p>
+                          <p className="text-sm text-gray-500 mt-1">+₮{fmt(activePayment.amount)}</p>
+                        </div>
+                      ) : activePayment.status === 'FAILED' || activePayment.status === 'CANCELLED' ? (
+                        <div className="text-center py-6 space-y-3">
+                          <p className="text-4xl">❌</p>
+                          <p className="font-semibold text-gray-900">Төлбөр амжилтгүй болсон</p>
+                          <p className="text-sm text-gray-500">Дахин оролдоно уу.</p>
+                          <button
+                            onClick={() => { setActivePayment(null); setTopupMsg(''); }}
+                            className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
+                          >
+                            Дахин оролдох
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="text-center space-y-3">
+                            <p className="text-sm text-gray-600">
+                              <span className="font-semibold text-gray-900">₮{fmt(activePayment.amount)}</span> — {activePayment.provider === 'QPAY' ? 'QPay QR уншуулна уу' : 'SocialPay дарна уу'}
+                            </p>
+
+                            {activePayment.expiredAt && (
+                              <p className="text-xs text-amber-600">
+                                ⏱ Дуусах хугацаа: {new Date(activePayment.expiredAt).toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            )}
+
+                            {activePayment.qrImage && (
+                              <img
+                                src={`data:image/png;base64,${activePayment.qrImage}`}
+                                alt="QPay QR"
+                                className="mx-auto w-52 h-52 rounded-xl border border-gray-100"
+                              />
+                            )}
+
+                            {activePayment.checkoutUrl && (
+                              <a
+                                href={activePayment.checkoutUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors"
+                              >
+                                SocialPay дарж төлөх
+                              </a>
+                            )}
+
+                            {activePayment.deepLinks && activePayment.deepLinks.length > 0 && (
+                              <div className="flex flex-wrap gap-2 justify-center">
+                                {activePayment.deepLinks.slice(0, 4).map((dl) => (
+                                  <a
+                                    key={dl.name}
+                                    href={dl.link}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-700 hover:bg-gray-50"
+                                  >
+                                    {dl.logo && <img src={dl.logo} alt={dl.name} className="w-4 h-4" />}
+                                    {dl.name}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {topupMsg && (
+                            <p className={clsx(
+                              'text-xs text-center',
+                              topupMsg.includes('амжилттай') ? 'text-green-600'
+                                : topupMsg.includes('амжилтгүй') ? 'text-red-500'
+                                : 'text-amber-600',
+                            )}>
+                              {topupMsg}
+                            </p>
+                          )}
+
+                          <button
+                            onClick={handleCheckPayment}
+                            disabled={checkPayment.isPending}
+                            className="w-full py-2.5 border border-indigo-300 text-indigo-700 rounded-xl text-sm font-semibold hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                          >
+                            {checkPayment.isPending ? 'Шалгаж байна...' : 'Төлбөр шалгах'}
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Dev top-up panel — hidden in production */}

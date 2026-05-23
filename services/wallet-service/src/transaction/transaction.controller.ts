@@ -28,9 +28,12 @@ export class TransactionController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get transaction by ID' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    const data = await this.transactionService.findOne(id);
+  @ApiOperation({ summary: 'Get transaction by ID (own transactions only)' })
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtUser,
+  ) {
+    const data = await this.transactionService.findOne(id, user.sub);
     return ApiResponseBuilder.success(data);
   }
 }

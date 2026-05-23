@@ -33,8 +33,18 @@ export class UserService {
     return profile;
   }
 
-  async updateMe(userId: string, dto: UpdateProfileDto): Promise<UserProfile> {
-    await this.findMe(userId);
+  async updateMe(userId: string, email: string, dto: UpdateProfileDto): Promise<UserProfile> {
+    // Auto-bootstrap profile if it doesn't exist (handles seeded/OAuth users)
+    await this.prisma.userProfile.upsert({
+      where:  { id: userId },
+      update: {},
+      create: {
+        id:          userId,
+        displayName: dto.displayName ?? email.split('@')[0],
+        locale:      'mn',
+        timezone:    'Asia/Ulaanbaatar',
+      },
+    });
     return this.prisma.userProfile.update({
       where: { id: userId },
       data:  dto,

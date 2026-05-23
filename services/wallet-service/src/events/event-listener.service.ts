@@ -5,10 +5,12 @@ import {
   CourseContentEventPatterns,
   EnrollmentCreatedPayload,
   EventTypes,
+  PaymentConfirmedPayload,
 } from '@lms/shared-types';
 import { RevenueService } from '../revenue/revenue.service';
 import { EventFailureService } from '../event-failure/event-failure.service';
 import { CourseProjectionService } from '../course-projection/course-projection.service';
+import { WalletService } from '../wallet/wallet.service';
 
 @Controller()
 export class EventListenerService {
@@ -18,7 +20,45 @@ export class EventListenerService {
     private readonly revenue: RevenueService,
     private readonly eventFailure: EventFailureService,
     private readonly courseProjection: CourseProjectionService,
+    private readonly walletService: WalletService,
   ) {}
+
+  @EventPattern(EventTypes.PAYMENT_CONFIRMED)
+  async onPaymentConfirmed(@Payload() event: PaymentConfirmedPayload): Promise<void> {
+    if (event.purpose !== 'WALLET_TOPUP') {
+      this.logger.debug(
+        `Skipping payment.confirmed — purpose=${event.purpose} paymentId=${event.paymentId}`,
+      );
+      return;
+    }
+
+    const userId = event.walletOwnerId ?? event.userId;
+    this.logger.log(
+      `Wallet topup — crediting userId=${userId} amount=${event.amount} paymentId=${event.paymentId}`,
+    );
+
+    try {
+      await this.walletService.getOrCreate(userId);
+      await this.walletService.credit(
+        userId,
+        parseFloat(event.amount),
+        'Хэтэвч цэнэглэлт',
+        'WALLET_TOPUP',
+        `payment:${event.paymentId}`,
+      );
+      this.logger.log(`Wallet credited for paymentId=${event.paymentId}`);
+    } catch (err) {
+      this.logger.error(`Wallet topup failed for paymentId=${event.paymentId}`, err);
+      await this.eventFailure.record({
+        eventType: EventTypes.PAYMENT_CONFIRMED,
+        consumer: 'wallet-service',
+        payload: event,
+        error: err,
+        eventId: event.paymentId,
+      });
+      throw err;
+    }
+  }
 
   @EventPattern(EventTypes.ENROLLMENT_CREATED)
   async onEnrollmentCreated(@Payload() event: EnrollmentCreatedPayload): Promise<void> {

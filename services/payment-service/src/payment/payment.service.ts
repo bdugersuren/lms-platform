@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import axios from 'axios';
 import { Decimal } from '@prisma/client/runtime/library';
 import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,7 +15,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { QPayService } from '../qpay/qpay.service';
 import { SocialPayService } from '../socialpay/socialpay.service';
 import { MockPaymentService } from '../mock/mock-payment.service';
-import { CreatePaymentDto, PaymentProviderDto } from './dto/create-payment.dto';
+import { CreatePaymentDto, PaymentProviderDto, PaymentPurposeDto } from './dto/create-payment.dto';
 import { QueryPaymentDto } from './dto/query-payment.dto';
 
 @Injectable()
@@ -30,12 +32,23 @@ export class PaymentService {
   ) {}
 
   async create(userId: string, dto: CreatePaymentDto) {
-    const description = dto.description ?? `Course payment — ${dto.courseId}`;
+    const purpose = dto.purpose ?? PaymentPurposeDto.COURSE_PURCHASE;
+    const isTopup = purpose === PaymentPurposeDto.WALLET_TOPUP;
+
+    if (!isTopup && !dto.courseId) {
+      throw new BadRequestException('courseId is required for COURSE_PURCHASE');
+    }
+
+    const description =
+      dto.description ??
+      (isTopup ? 'Хэтэвч цэнэглэлт' : `Course payment — ${dto.courseId}`);
 
     const payment = await this.prisma.payment.create({
       data: {
         userId,
-        courseId: dto.courseId,
+        purpose,
+        courseId: isTopup ? null : dto.courseId,
+        walletOwnerId: isTopup ? userId : null,
         amount: new Decimal(dto.amount),
         provider: dto.provider,
         description,
@@ -45,6 +58,30 @@ export class PaymentService {
     });
 
     try {
+      if (dto.provider === PaymentProviderDto.WALLET) {
+        const walletServiceUrl = process.env.WALLET_SERVICE_URL ?? 'http://wallet-service:3009';
+        const internalSecret = process.env.INTERNAL_SERVICE_SECRET ?? 'internal-secret';
+        try {
+          await axios.post(
+            `${walletServiceUrl}/wallet/internal/deduct`,
+            {
+              ownerId: userId,
+              amount: dto.amount,
+              description: description,
+              reference: payment.id,
+            },
+            { headers: { 'x-internal-secret': internalSecret }, timeout: 10000 },
+          );
+        } catch (walletErr: unknown) {
+          const msg = (walletErr as { response?: { data?: { message?: string } } })?.response?.data?.message
+            ?? (walletErr as Error)?.message
+            ?? 'Хэтэвч хасалт амжилтгүй';
+          await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED' } });
+          throw new BadRequestException(msg);
+        }
+        return this.completePayment(payment.id);
+      }
+
       if (dto.provider === PaymentProviderDto.MOCK) {
         const invoice = this.mockPayment.createInvoice(payment.id);
         return this.prisma.payment.update({
@@ -59,7 +96,7 @@ export class PaymentService {
 
       if (dto.provider === PaymentProviderDto.QPAY) {
         const invoice = await this.qpay.createInvoice({
-          invoiceCode: 'LMS_PAYMENT',
+          invoiceCode: isTopup ? 'LMS_TOPUP' : 'LMS_PAYMENT',
           senderInvoiceNo: payment.id,
           invoiceReceiverCode: userId,
           amount: dto.amount,
@@ -105,9 +142,12 @@ export class PaymentService {
     }
   }
 
-  async findById(id: string) {
+  async findById(id: string, requesterId?: string, isAdmin = false) {
     const payment = await this.prisma.payment.findUnique({ where: { id } });
     if (!payment) throw new NotFoundException('Payment not found');
+    if (requesterId && !isAdmin && payment.userId !== requesterId) {
+      throw new ForbiddenException('Access denied');
+    }
     return payment;
   }
 
@@ -134,11 +174,10 @@ export class PaymentService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async checkPayment(paymentId: string) {
-    const payment = await this.findById(paymentId);
+  async checkPayment(paymentId: string, requesterId?: string) {
+    const payment = await this.findById(paymentId, requesterId);
 
     if (payment.status === 'COMPLETED') return payment;
-    // MOCK payments are only completed via POST /webhooks/mock-pay/:id
     if (payment.provider === 'MOCK') return payment;
     if (!payment.invoiceId) throw new BadRequestException('No invoice found for this payment');
 
@@ -186,7 +225,9 @@ export class PaymentService {
         payload: {
           paymentId: updated.id,
           userId: updated.userId,
-          courseId: updated.courseId,
+          purpose: updated.purpose,
+          courseId: updated.courseId ?? undefined,
+          walletOwnerId: updated.walletOwnerId ?? undefined,
           amount: updated.amount.toString(),
           currency: updated.currency,
           provider: updated.provider,
@@ -196,7 +237,7 @@ export class PaymentService {
       return updated;
     });
 
-    this.logger.log(`Payment completed: ${paymentId}`);
+    this.logger.log(`Payment completed: ${paymentId} purpose=${payment.purpose}`);
     return payment;
   }
 
@@ -211,7 +252,6 @@ export class PaymentService {
     return result.count;
   }
 
-  // Admin: list all payments
   async findAll(dto: QueryPaymentDto) {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;

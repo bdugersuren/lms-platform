@@ -91,24 +91,18 @@ describe('UserService', () => {
   // ── updateMe ───────────────────────────────────────────────────────────────
 
   describe('updateMe', () => {
-    it('updates and returns the updated profile', async () => {
+    it('upserts then updates and returns the updated profile', async () => {
       const updated = { ...mockProfile, displayName: 'New Name' };
-      mockPrisma.userProfile.findUnique.mockResolvedValue(mockProfile);
+      mockPrisma.userProfile.upsert.mockResolvedValue(mockProfile);
       mockPrisma.userProfile.update.mockResolvedValue(updated);
 
-      const result = await service.updateMe('user-uuid-1', { displayName: 'New Name' });
+      const result = await service.updateMe('user-uuid-1', 'test@example.com', { displayName: 'New Name' });
 
       expect(mockPrisma.userProfile.update).toHaveBeenCalledWith({
         where: { id: 'user-uuid-1' },
         data:  { displayName: 'New Name' },
       });
       expect(result.displayName).toBe('New Name');
-    });
-
-    it('throws NotFoundException when the profile to update does not exist', async () => {
-      mockPrisma.userProfile.findUnique.mockResolvedValue(null);
-
-      await expect(service.updateMe('missing-uuid', { bio: 'x' })).rejects.toThrow(NotFoundException);
     });
   });
 

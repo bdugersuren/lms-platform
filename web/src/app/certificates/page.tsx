@@ -3,15 +3,10 @@
 import { useState } from 'react';
 import { useCertificates, useIssueCertificate, useRevokeCertificate } from '@/hooks/use-certificate';
 import { useAuthStore } from '@/store/auth.store';
+import { formatDate } from '@/lib/format';
 import type { Certificate } from '@/types/certificate';
 
 const PAGE_SIZE = 12;
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
-}
 
 // ─── Certificate Card ──────────────────────────────────────────────────────────
 function CertificateCard({
@@ -39,7 +34,7 @@ function CertificateCard({
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
             cert.status === 'ISSUED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
           }`}>
-            {cert.status}
+            {cert.status === 'ISSUED' ? 'Олгогдсон' : 'Цуцлагдсан'}
           </span>
           {cert.status === 'ISSUED' && (
             <span className="text-2xl">🏆</span>
@@ -54,11 +49,11 @@ function CertificateCard({
         )}
 
         <div className="border-t pt-3 mt-3 space-y-1 text-xs text-gray-500">
-          <p>Issued by: <span className="font-medium text-gray-700">{cert.issuerName}</span></p>
-          <p>Completed: <span className="font-medium text-gray-700">{formatDate(cert.completedAt)}</span></p>
-          <p>Issued: <span className="font-medium text-gray-700">{formatDate(cert.issuedAt)}</span></p>
+          <p>Олгосон: <span className="font-medium text-gray-700">{cert.issuerName}</span></p>
+          <p>Дуусгасан: <span className="font-medium text-gray-700">{formatDate(cert.completedAt)}</span></p>
+          <p>Олгосон огноо: <span className="font-medium text-gray-700">{formatDate(cert.issuedAt)}</span></p>
           {cert.expiresAt && (
-            <p>Expires: <span className="font-medium text-gray-700">{formatDate(cert.expiresAt)}</span></p>
+            <p>Дуусах огноо: <span className="font-medium text-gray-700">{formatDate(cert.expiresAt)}</span></p>
           )}
         </div>
 
@@ -84,13 +79,13 @@ function CertificateCard({
             rel="noreferrer"
             className="text-xs text-blue-600 hover:underline flex items-center gap-1"
           >
-            🔗 Verify
+            🔗 Баталгаажуулах
           </a>
           <button
             onClick={() => setExpanded(v => !v)}
             className="text-xs text-gray-500 hover:text-gray-700"
           >
-            {expanded ? '▲ Hide QR' : '▼ Show QR'}
+            {expanded ? '▲ QR нуух' : '▼ QR харах'}
           </button>
           <button
             onClick={() => {
@@ -103,14 +98,14 @@ function CertificateCard({
             }}
             className="text-xs text-green-600 hover:underline ml-auto"
           >
-            🖨️ Print
+            🖨️ Хэвлэх
           </button>
           {isAdmin && cert.status === 'ISSUED' && (
             <button
               onClick={() => onRevoke(cert.id)}
               className="text-xs text-red-500 hover:underline"
             >
-              Revoke
+              Цуцлах
             </button>
           )}
         </div>
@@ -140,7 +135,7 @@ function buildPrintHtml(cert: Certificate): string {
   <div class="name">${cert.recipientName}</div>
   ${cert.description ? `<div class="desc">has successfully completed <strong>${cert.description}</strong></div>` : ''}
   <div class="meta">
-    <p>Issued by <strong>${cert.issuerName}</strong> on ${new Date(cert.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+    <p>Олгосон: <strong>${cert.issuerName}</strong> · ${new Date(cert.issuedAt).toLocaleDateString('mn-MN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
     ${cert.expiresAt ? `<p>Valid until ${new Date(cert.expiresAt).toLocaleDateString()}</p>` : ''}
   </div>
   <div class="verify">Verify at: ${typeof window !== 'undefined' ? window.location.origin : ''}/certificates/verify/${cert.verifyCode}</div>
@@ -178,15 +173,15 @@ function IssueModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Issue Certificate</h2>
+          <h2 className="text-lg font-semibold">Гэрчилгээ олгох</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
         </div>
         {done ? (
           <div className="text-center py-6">
             <p className="text-3xl mb-2">🏆</p>
-            <p className="text-green-600 font-semibold">Certificate issued successfully!</p>
-            <p className="text-sm text-gray-500 mt-1">QR code will be generated in the background.</p>
-            <button onClick={onClose} className="mt-4 text-sm text-blue-600 hover:underline">Close</button>
+            <p className="text-green-600 font-semibold">Гэрчилгээ амжилттай олгогдлоо!</p>
+            <p className="text-sm text-gray-500 mt-1">QR код ард нь үүсгэгдэж байна.</p>
+            <button onClick={onClose} className="mt-4 text-sm text-blue-600 hover:underline">Хаах</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
@@ -217,7 +212,7 @@ function IssueModal({ onClose }: { onClose: () => void }) {
               disabled={issue.isPending}
               className="w-full bg-amber-500 text-white py-2 rounded-lg hover:bg-amber-600 disabled:opacity-50 font-medium text-sm"
             >
-              {issue.isPending ? 'Issuing…' : 'Issue Certificate'}
+              {issue.isPending ? 'Олгож байна...' : 'Гэрчилгээ олгох'}
             </button>
           </form>
         )}
@@ -255,16 +250,16 @@ export default function CertificatesPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              🏆 My Certificates
+              🏆 Миний гэрчилгээнүүд
             </h1>
-            <p className="text-sm text-gray-500 mt-0.5">{total} certificate{total !== 1 ? 's' : ''} earned</p>
+            <p className="text-sm text-gray-500 mt-0.5">{total} гэрчилгээ</p>
           </div>
           {(isAdmin || user?.role === 'INSTRUCTOR') && (
             <button
               onClick={() => setShowIssue(true)}
               className="bg-amber-500 text-white px-4 py-2 rounded-lg hover:bg-amber-600 text-sm font-medium"
             >
-              + Issue Certificate
+              + Гэрчилгээ олгох
             </button>
           )}
         </div>
@@ -275,7 +270,7 @@ export default function CertificatesPage() {
             type="search"
             value={search}
             onChange={e => { setSearch(e.target.value); setOffset(0); }}
-            placeholder="Search certificates…"
+            placeholder="Гэрчилгээ хайх..."
             className="border rounded-lg px-3 py-2 text-sm w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
           />
         </div>
@@ -298,11 +293,11 @@ export default function CertificatesPage() {
         ) : certs.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-5xl mb-3">🎓</p>
-            <p className="text-gray-500 text-lg">No certificates yet</p>
-            <p className="text-sm text-gray-400 mt-1">Complete courses to earn your first certificate</p>
+            <p className="text-gray-500 text-lg">Гэрчилгээ байхгүй байна</p>
+            <p className="text-sm text-gray-400 mt-1">Сургалт дуусгаж анхны гэрчилгээгээ авна уу</p>
             {search && (
               <button onClick={() => setSearch('')} className="mt-3 text-sm text-amber-600 hover:underline">
-                Clear search
+                Хайлтыг цэвэрлэх
               </button>
             )}
           </div>
@@ -327,15 +322,15 @@ export default function CertificatesPage() {
               disabled={offset === 0}
               className="px-3 py-1.5 border rounded-lg text-sm hover:bg-white disabled:opacity-40"
             >
-              ← Prev
+              ← Өмнөх
             </button>
-            <span className="text-sm text-gray-600">Page {currentPage} of {totalPages}</span>
+            <span className="text-sm text-gray-600">{currentPage} / {totalPages} хуудас</span>
             <button
               onClick={() => setOffset(o => o + PAGE_SIZE)}
               disabled={offset + PAGE_SIZE >= total}
               className="px-3 py-1.5 border rounded-lg text-sm hover:bg-white disabled:opacity-40"
             >
-              Next →
+              Дараах →
             </button>
           </div>
         )}

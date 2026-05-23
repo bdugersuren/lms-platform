@@ -53,7 +53,7 @@ export class UserController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: UpdateProfileDto,
   ) {
-    const profile = await this.userService.updateMe(user.sub, dto);
+    const profile = await this.userService.updateMe(user.sub, user.email, dto);
     return ApiResponseBuilder.success(profile, 'Profile updated');
   }
 

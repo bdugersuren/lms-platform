@@ -270,6 +270,18 @@ export default function DashboardPage() {
                   </div>
                 </Link>
               )}
+              <Link
+                href="/dashboard/settings"
+                className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-indigo-200 hover:shadow-md transition-all group"
+              >
+                <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center group-hover:bg-slate-100 transition-colors">
+                  <span className="text-xl">👤</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Тохиргоо</p>
+                  <p className="text-xs text-slate-400">Профайл засах</p>
+                </div>
+              </Link>
               {(user.role === 'INSTRUCTOR' || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && (
                 <>
                   <Link

@@ -8,12 +8,17 @@ import { useCourse } from '@/hooks/use-courses';
 import { useInteractiveBlocks } from '@/hooks/use-blocks';
 import { useMe } from '@/hooks/use-auth';
 import { useAuthStore } from '@/store/auth.store';
+import { useEnrollmentByCourse, useSubmitBlockAnswers } from '@/hooks/use-enrollment';
+import type { AnswerItem } from '@/hooks/use-enrollment';
 import type { CourseModule, InteractiveBlock, Lesson, LessonType } from '@/types/course';
+import type { LessonProgress } from '@/hooks/use-enrollment';
 
 import { VideoPlayer } from '@/components/lesson-viewer/video-player';
 import { PdfViewer } from '@/components/lesson-viewer/pdf-viewer';
 import { MarkdownView } from '@/components/lesson-viewer/markdown-view';
 import { BlockQuiz } from '@/components/lesson-viewer/block-quiz';
+import { LessonCompletionButton } from '@/components/lesson-viewer/lesson-completion-button';
+import { CourseCompletionModal } from '@/components/lesson-viewer/course-completion-modal';
 
 // ─── Lesson type meta ─────────────────────────────────────────────────────────
 
@@ -46,10 +51,14 @@ export default function LessonViewerPage() {
   const { data: user } = useMe();
   const { data: courseData, isLoading, error } = useCourse(courseId);
   const { data: blocksData, isLoading: blocksLoading } = useInteractiveBlocks(lessonId);
+  const { data: enrollment } = useEnrollmentByCourse(isAuthenticated ? courseId : null);
+  const { mutateAsync: submitBlockAnswers } = useSubmitBlockAnswers();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   const course = courseData?.data;
   const blocks = blocksData?.data ?? [];
+  const lessonProgresses = enrollment?.lessonProgresses ?? [];
 
   // Flatten all lessons for navigation
   const allLessons: Array<{ lesson: Lesson; moduleTitle: string; moduleIdx: number }> = [];
@@ -62,11 +71,14 @@ export default function LessonViewerPage() {
   const currentIdx = allLessons.findIndex((e) => e.lesson.id === lessonId);
   const prevLesson = currentIdx > 0 ? allLessons[currentIdx - 1].lesson : null;
   const nextLesson = currentIdx < allLessons.length - 1 ? allLessons[currentIdx + 1].lesson : null;
+  const isLastLesson = currentIdx === allLessons.length - 1;
 
   const isOwner = course?.instructorId === user?.id;
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const isInstructor = user?.role === 'INSTRUCTOR';
   const isPreviewMode = isOwner || isAdmin || isInstructor;
+
+  const currentProgress = lessonProgresses.find((lp) => lp.lessonId === lessonId);
 
   // Loading
   if (isLoading) {
@@ -158,6 +170,11 @@ export default function LessonViewerPage() {
               {lesson.estimatedMinutes && (
                 <span className="text-xs text-slate-400">{lesson.estimatedMinutes} мин</span>
               )}
+              {currentProgress?.completed && (
+                <span className="text-xs bg-emerald-50 text-emerald-600 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
+                  ✓ Дуусгасан
+                </span>
+              )}
             </div>
             <h1 className="text-xl font-bold text-slate-900">{lesson.title}</h1>
             {lesson.description && (
@@ -166,9 +183,17 @@ export default function LessonViewerPage() {
           </div>
 
           {/* Content renderer */}
-          <LessonContent lesson={lesson} blocks={blocks} blocksLoading={blocksLoading} />
+          <LessonContent
+            lesson={lesson}
+            blocks={blocks}
+            blocksLoading={blocksLoading}
+            enrollmentId={enrollment?.id}
+            onSubmitAnswers={enrollment ? async (blockId: string, answers: AnswerItem[]) => {
+              await submitBlockAnswers({ enrollmentId: enrollment.id, lessonId, interactiveBlockId: blockId, answers });
+            } : undefined}
+          />
 
-          {/* Prev / Next navigation */}
+          {/* Navigation + completion */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-200">
             {prevLesson ? (
               <Link
@@ -182,23 +207,32 @@ export default function LessonViewerPage() {
             ) : (
               <div />
             )}
-            {nextLesson ? (
-              <Link
-                href={`/courses/${courseId}/lessons/${nextLesson.id}`}
-                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
-              >
-                <span className="hidden sm:inline truncate max-w-[160px]">{nextLesson.title}</span>
-                <span className="sm:hidden">Дараах</span>
-                <span>→</span>
-              </Link>
-            ) : (
-              <Link
-                href={`/courses/${courseId}`}
-                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors"
-              >
-                Курс дуусгах ✓
-              </Link>
-            )}
+
+            <div className="flex items-center gap-3">
+              {/* Completion button — зөвхөн бүртгэгдсэн сурагчдад харагдана */}
+              {enrollment && !isPreviewMode && (
+                <LessonCompletionButton
+                  enrollmentId={enrollment.id}
+                  lessonId={lessonId}
+                  completed={currentProgress?.completed ?? false}
+                  locked={currentProgress?.status === 'LOCKED'}
+                  isLastLesson={isLastLesson}
+                  onCompleted={isLastLesson ? () => setShowCompletionModal(true) : undefined}
+                />
+              )}
+
+              {/* Next lesson navigation */}
+              {nextLesson && (
+                <Link
+                  href={`/courses/${courseId}/lessons/${nextLesson.id}`}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
+                >
+                  <span className="hidden sm:inline truncate max-w-[160px]">{nextLesson.title}</span>
+                  <span className="sm:hidden">Дараах</span>
+                  <span>→</span>
+                </Link>
+              )}
+            </div>
           </div>
         </main>
 
@@ -215,15 +249,38 @@ export default function LessonViewerPage() {
             <p className="text-xs text-slate-400 mt-0.5">
               {currentIdx + 1} / {allLessons.length} хичээл
             </p>
+            {enrollment && (
+              <div className="mt-2">
+                <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                  <span>Явц</span>
+                  <span>{enrollment.progressPercent}%</span>
+                </div>
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-500 rounded-full transition-all"
+                    style={{ width: `${enrollment.progressPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <CurriculumSidebar
             modules={course.modules}
             currentLessonId={lessonId}
             courseId={courseId}
+            lessonProgresses={lessonProgresses}
           />
         </aside>
       </div>
+
+      {showCompletionModal && (
+        <CourseCompletionModal
+          courseId={courseId}
+          courseTitle={course.title}
+          onClose={() => setShowCompletionModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -234,10 +291,13 @@ function LessonContent({
   lesson,
   blocks,
   blocksLoading,
+  onSubmitAnswers,
 }: {
   lesson: Lesson;
   blocks: InteractiveBlock[];
   blocksLoading: boolean;
+  enrollmentId?: string;
+  onSubmitAnswers?: (blockId: string, answers: AnswerItem[]) => Promise<void>;
 }) {
   const spinner = (
     <div className="flex justify-center py-12">
@@ -277,7 +337,7 @@ function LessonContent({
         {!blocksLoading && blocks.length > 0 && (
           <div className="space-y-4 pt-4 border-t border-slate-100">
             {blocks.map((b) => (
-              <BlockQuiz key={b.id} block={b} onComplete={() => {}} />
+              <BlockQuiz key={b.id} block={b} onComplete={() => {}} onSubmitAnswers={onSubmitAnswers} />
             ))}
           </div>
         )}
@@ -311,7 +371,7 @@ function LessonContent({
         {!blocksLoading && blocks.length > 0 && (
           <div className="space-y-4 border-t border-slate-100 pt-6">
             {blocks.map((b) => (
-              <BlockQuiz key={b.id} block={b} onComplete={() => {}} />
+              <BlockQuiz key={b.id} block={b} onComplete={() => {}} onSubmitAnswers={onSubmitAnswers} />
             ))}
           </div>
         )}
@@ -320,7 +380,6 @@ function LessonContent({
   }
 
   if (lesson.lessonType === 'QUIZ') {
-    // Pure quiz mode — just show all blocks sequentially
     if (blocksLoading) return spinner;
     if (blocks.length === 0) {
       return <EmptyContent message="Тест блок тохируулаагүй байна. Хичээл засварт интерактив блок нэмнэ үү." />;
@@ -371,10 +430,12 @@ function CurriculumSidebar({
   modules,
   currentLessonId,
   courseId,
+  lessonProgresses,
 }: {
   modules: CourseModule[];
   currentLessonId: string;
   courseId: string;
+  lessonProgresses: LessonProgress[];
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -384,6 +445,9 @@ function CurriculumSidebar({
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+
+  const getProgress = (lessonId: string) =>
+    lessonProgresses.find((lp) => lp.lessonId === lessonId);
 
   return (
     <div className="divide-y divide-slate-100">
@@ -400,23 +464,36 @@ function CurriculumSidebar({
 
           {!collapsed.has(mod.id) && (
             <div className="bg-slate-50/50">
-              {mod.lessons.map((lesson, li) => {
+              {mod.lessons.map((lesson) => {
                 const isCurrent = lesson.id === currentLessonId;
+                const progress = getProgress(lesson.id);
+                const isCompleted = progress?.completed ?? false;
+                const isLocked = progress?.status === 'LOCKED';
+
                 return (
                   <Link
                     key={lesson.id}
-                    href={`/courses/${courseId}/lessons/${lesson.id}`}
+                    href={isLocked ? '#' : `/courses/${courseId}/lessons/${lesson.id}`}
+                    onClick={(e: React.MouseEvent) => isLocked && e.preventDefault()}
                     className={clsx(
                       'flex items-center gap-3 px-5 py-2.5 text-sm transition-colors border-l-2',
                       isCurrent
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium'
+                        : isLocked
+                        ? 'border-transparent text-slate-400 cursor-not-allowed'
                         : 'border-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-800',
                     )}
                   >
                     <span className="text-base shrink-0">{LESSON_ICON[lesson.lessonType]}</span>
                     <span className="flex-1 leading-snug line-clamp-2">{lesson.title}</span>
-                    {lesson.estimatedMinutes && (
+                    {lesson.estimatedMinutes && !isCompleted && !isLocked && (
                       <span className="text-xs text-slate-400 shrink-0">{lesson.estimatedMinutes}м</span>
+                    )}
+                    {isCompleted && (
+                      <span className="text-xs text-emerald-500 shrink-0 font-medium">✓</span>
+                    )}
+                    {isLocked && !isCompleted && (
+                      <span className="text-xs text-slate-400 shrink-0">🔒</span>
                     )}
                   </Link>
                 );

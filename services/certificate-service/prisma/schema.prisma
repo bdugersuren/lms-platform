@@ -32,6 +32,7 @@ model Certificate {
 
   @@index([userId])
   @@index([courseId])
+  @@index([userId, courseId])
   @@index([verifyCode])
 }
 

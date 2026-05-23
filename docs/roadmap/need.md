@@ -5,8 +5,8 @@
 | ENG-001 | Centralize service metadata and standardize microservice conventions | Normal | DONE | |
 | ENG-002 | services/user-service | Normal | DONE |  |
 | ENG-003 | Enrollment/progress хоёр газар давхар байна| Normal | DONE |   |
-| ENG-004 | Event contract-ууд scattered string literal| High | TODO |  Solution |
-
+| ENG-004 | Event contract-ууд scattered string literal| Normal | DONE |  Solution |
+| ENG-005 | Wallet, payment, банкны QR top-up | High | TODO |  Solution |
 
 ENG-001 Details
 
@@ -187,3 +187,83 @@ Enrollment service course-service-аас course basic/module lesson data HTTP-р
 - Read model projection ашиглах: `course.published/course.updated` event-ээр enrollment/wallet service-д course snapshot хадгалах.
 - Synchronous call-ийг зөвхөн fallback эсвэл admin repair task болгох.
 - Timeout, retry, circuit breaker (`@nestjs/axios` + retry/backoff) стандартчилах.
+
+
+ENG-005 Wallet, payment, банкны QR top-up
+
+## 5. Wallet, payment, банкны QR top-up
+
+### 5.1 Wallet top-up production workflow байхгүй
+
+Frontend `web/src/app/wallet/page.tsx` дээр зөвхөн development top-up panel байна. Backend `wallet-service` дээр `POST /wallet/dev/topup` production дээр хаагддаг. Payment service-ийн `CreatePaymentDto` заавал `courseId` авдаг тул wallet цэнэглэх төлбөр үүсгэх боломжгүй.
+
+Сурагчийн хүссэн workflow:
+
+1. Сурагч `Хэтэвч цэнэглэх` дарна.
+2. Дүн сонгоно эсвэл оруулна.
+3. Банкны QR/QPay invoice үүснэ.
+4. Сурагч банкны апп-аар QR уншуулж төлнө.
+5. Payment provider webhook/check амжилттай бол wallet balance нэмэгдэнэ.
+6. Transaction history дээр `CREDIT` буюу `WALLET_TOPUP` гэж харагдана.
+
+Сайжруулах санал:
+
+- Payment schema дээр `purpose` нэмэх:
+
+```prisma
+enum PaymentPurpose {
+  COURSE_PURCHASE
+  WALLET_TOPUP
+}
+
+model Payment {
+  purpose PaymentPurpose @default(COURSE_PURCHASE)
+  courseId String?
+  walletOwnerId String?
+}
+```
+
+- `CreatePaymentDto`-г хоёр төрөлтэй болгох:
+  - `COURSE_PURCHASE`: `courseId` required.
+  - `WALLET_TOPUP`: `amount` required, `courseId` байхгүй.
+- Payment confirmed event-д `purpose` дамжуулах.
+- Wallet service `payment.confirmed` сонсоод `purpose === WALLET_TOPUP` үед `walletService.credit(userId, amount, 'Хэтэвч цэнэглэлт', 'CREDIT', paymentId)` хийх.
+- Enrollment service зөвхөн `purpose === COURSE_PURCHASE` үед auto-enroll хийх.
+- Frontend wallet page дээр:
+  - `Цэнэглэх` primary CTA.
+  - Preset amounts: 10k, 50k, 100k, 500k.
+  - Provider сонголт: QPay, SocialPay.
+  - QR image/deeplink modal.
+  - `Төлбөр шалгах` polling эсвэл manual check.
+  - Completed үед wallet query invalidate.
+
+### 5.2 Payment ownership шалгалт дутуу
+
+`PaymentController.findOne` болон `checkPayment` нь authenticated user-аас id авдаг боловч payment owner эсэхийг шалгахгүй байна. Нэг хэрэглэгч бусдын payment UUID мэдвэл төлбөрийн мэдээлэл харах эсвэл status check trigger хийх боломжтой.
+
+Сайжруулах санал:
+
+- `findById(id, user)` болгож owner/admin шалгах.
+- `checkPayment(id, user)` дээр мөн адил.
+- Admin list endpoint тусдаа role guard-тэй байх.
+
+### 5.3 Mock/dev endpoints production hardening
+
+`POST /webhooks/mock-pay/:paymentId` нь guard-гүй байна. Энэ нь mock provider payment-ийг шууд complete хийх боломжтой. `simulate` guard-тэй боловч role эсвэл NODE_ENV шалгалт тод харагдахгүй.
+
+Сайжруулах санал:
+
+- `mock-pay`, `simulate` endpoint-үүдийг `NODE_ENV !== 'production'` үед л module-д бүртгэх эсвэл guard дотор production дээр 404/403 буцаах.
+- Admin/dev role guard нэмэх.
+- Public webhook endpoint дээр provider signature validation хийх.
+- Webhook replay/idempotency key ашиглах.
+
+### 5.4 Wallet transaction type нарийвчлал
+
+`TransactionType.CREDIT` бүх орлогыг төлөөлж байна. Wallet top-up, refund, admin adjustment, revenue share ялгарах хэрэгтэй.
+
+Сайжруулах санал:
+
+- `WALLET_TOPUP`, `ADMIN_ADJUSTMENT`, `COURSE_PURCHASE`, `REFUND` зэрэг type нэмэх.
+- `reference` unique optional index нэмэх: нэг paymentId-ээр давхар credit хийхгүй.
+- Transaction metadata-д provider, invoiceId, paymentId хадгалах.

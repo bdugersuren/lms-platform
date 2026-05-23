@@ -200,12 +200,22 @@ export class EnrollmentService {
     const enrollments = await this.prisma.enrollment.findMany({
       where: { studentId },
       orderBy: { enrolledAt: 'desc' },
+      include: {
+        lessonProgresses: {
+          where: { status: 'IN_PROGRESS', completed: false },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+          select: { lessonId: true },
+        },
+      },
     });
 
     const results = await Promise.all(
       enrollments.map(async (e) => {
         const courseInfo = await this.courseClient.getCourseBasic(e.courseId);
-        return { ...e, course: courseInfo };
+        const nextLessonId = e.lessonProgresses[0]?.lessonId ?? null;
+        const { lessonProgresses: _, ...enrollment } = e;
+        return { ...enrollment, course: courseInfo, nextLessonId };
       }),
     );
 

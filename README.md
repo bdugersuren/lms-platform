@@ -109,3 +109,10 @@ AI-г зогсооход:
 
 
 docker compose stop ollama ai-service
+
+
+
+
+
+
+

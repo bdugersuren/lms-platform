@@ -17,6 +17,8 @@ export interface Course {
   status: CourseStatus;
   tags: string[];
   language: string;
+  whatYouLearn: string[];
+  requirements: string[];
   totalLessons: number;
   totalMinutes: number;
   passingScore: number;
@@ -125,6 +127,8 @@ export interface CreateCourseDto {
   price?: string;
   tags?: string[];
   language?: string;
+  whatYouLearn?: string[];
+  requirements?: string[];
   isSequential?: boolean;
   passingScore?: number;
 }

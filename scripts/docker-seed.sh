@@ -31,19 +31,21 @@ if ! docker compose exec postgres pg_isready -U "$PG_USER" -q 2>/dev/null; then
   exit 1
 fi
 
+# Service → database mapping (seed дарааллаар)
 declare -A SVC_DB=(
   ["services/auth-service"]="auth_db"
+  ["services/user-service"]="user_db"
   ["services/course-service"]="course_db"
   ["services/enrollment-service"]="enrollment_db"
   ["services/quiz-service"]="quiz_db"
   ["services/assignment-service"]="assignment_db"
   ["services/wallet-service"]="wallet_db"
   ["services/payment-service"]="payment_db"
-  ["services/ai-service"]="ai_db"
   ["services/notification-service"]="notification_db"
-  ["services/media-service"]="media_db"
   ["services/certificate-service"]="certificate_db"
   ["services/analytics-service"]="analytics_db"
+  ["services/ai-service"]="ai_db"
+  ["services/media-service"]="media_db"
 )
 
 SEEDED=0
@@ -51,17 +53,18 @@ FAILED=()
 
 for SERVICE in \
   "services/auth-service" \
+  "services/user-service" \
   "services/course-service" \
   "services/enrollment-service" \
   "services/quiz-service" \
   "services/assignment-service" \
   "services/wallet-service" \
   "services/payment-service" \
-  "services/ai-service" \
   "services/notification-service" \
-  "services/media-service" \
   "services/certificate-service" \
-  "services/analytics-service"
+  "services/analytics-service" \
+  "services/ai-service" \
+  "services/media-service"
 do
   SCHEMA="$ROOT_DIR/$SERVICE/prisma/schema.prisma"
   SEED_FILE="$ROOT_DIR/$SERVICE/prisma/seed.ts"
@@ -74,14 +77,13 @@ do
   DB_URL="postgresql://$PG_USER:$PG_PASS@$PG_HOST:$PG_PORT/$DB_NAME"
   SVC_NAME="${SERVICE#services/}"
   WORKDIR="/app/$SERVICE"
-  SEED_CMD="cd $WORKDIR && pnpm exec prisma db push --schema prisma/schema.prisma && pnpm exec ts-node prisma/seed.ts"
+  SEED_CMD="cd $WORKDIR && pnpm exec ts-node prisma/seed.ts"
 
   echo "▶ Seeding $SERVICE (db: $DB_NAME) ..."
+  RUN_OK=0
   if docker compose ps --status running --services 2>/dev/null | grep -qx "$SVC_NAME"; then
-    RUN_OK=0
     docker compose exec -e DATABASE_URL="$DB_URL" "$SVC_NAME" sh -c "$SEED_CMD" || RUN_OK=$?
   else
-    RUN_OK=0
     docker compose run --rm --no-deps -e DATABASE_URL="$DB_URL" "$SVC_NAME" sh -c "$SEED_CMD" || RUN_OK=$?
   fi
 

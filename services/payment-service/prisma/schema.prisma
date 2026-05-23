@@ -17,6 +17,11 @@ enum PaymentProvider {
   MOCK
 }
 
+enum PaymentPurpose {
+  COURSE_PURCHASE
+  WALLET_TOPUP
+}
+
 enum PaymentStatus {
   PENDING     // Created, awaiting user action
   PROCESSING  // User initiated, awaiting confirmation
@@ -27,10 +32,12 @@ enum PaymentStatus {
 }
 
 model Payment {
-  id          String          @id @default(uuid())
-  userId      String          @map("user_id")
-  courseId    String          @map("course_id")
-  amount      Decimal         @db.Decimal(18, 2)
+  id            String          @id @default(uuid())
+  userId        String          @map("user_id")
+  purpose       PaymentPurpose  @default(COURSE_PURCHASE)
+  courseId      String?         @map("course_id")
+  walletOwnerId String?         @map("wallet_owner_id")
+  amount        Decimal         @db.Decimal(18, 2)
   currency    String          @default("MNT")
   provider    PaymentProvider
   status      PaymentStatus   @default(PENDING)
@@ -58,6 +65,7 @@ model Payment {
 
   @@index([userId])
   @@index([courseId])
+  @@index([purpose])
   @@index([status])
   @@index([invoiceId])
   @@map("payments")

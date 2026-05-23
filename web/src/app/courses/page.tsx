@@ -1,26 +1,60 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useCourses } from '@/hooks/use-courses';
+import { useMyEnrollments } from '@/hooks/use-enrollment';
 import { useAuthStore } from '@/store/auth.store';
 import type { CourseLevel, CourseStatus } from '@/types/course';
 import { clsx } from 'clsx';
 
 const LEVELS: { value: CourseLevel | ''; label: string }[] = [
-  { value: '', label: 'All levels' },
-  { value: 'BEGINNER', label: 'Beginner' },
-  { value: 'INTERMEDIATE', label: 'Intermediate' },
-  { value: 'ADVANCED', label: 'Advanced' },
+  { value: '', label: 'Бүх түвшин' },
+  { value: 'BEGINNER', label: 'Эхлэгч' },
+  { value: 'INTERMEDIATE', label: 'Дунд' },
+  { value: 'ADVANCED', label: 'Дэвшилтэт' },
 ];
 
 const STATUSES: { value: CourseStatus | ''; label: string }[] = [
-  { value: '', label: 'All statuses' },
-  { value: 'PUBLISHED', label: 'Published' },
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'ARCHIVED', label: 'Archived' },
+  { value: '', label: 'Бүх төлөв' },
+  { value: 'PUBLISHED', label: 'Нийтлэгдсэн' },
+  { value: 'DRAFT', label: 'Ноорог' },
+  { value: 'ARCHIVED', label: 'Архивлагдсан' },
 ];
+
+const SORTS = [
+  { value: 'newest', label: 'Шинэ эхэнд' },
+  { value: 'oldest', label: 'Хуучин эхэнд' },
+  { value: 'price_asc', label: 'Үнэ өсөх' },
+  { value: 'price_desc', label: 'Үнэ буурах' },
+];
+
+const PRICE_FILTERS = [
+  { value: 'all', label: 'Бүгд' },
+  { value: 'free', label: 'Үнэгүй' },
+  { value: 'paid', label: 'Төлбөртэй' },
+];
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  mn: 'Монгол 🇲🇳',
+  en: 'English 🇬🇧',
+  zh: 'Хятад 🇨🇳',
+  ru: 'Орос 🇷🇺',
+  ja: 'Япон 🇯🇵',
+  ko: 'Солонгос 🇰🇷',
+};
+
+const levelLabels: Record<CourseLevel, string> = {
+  BEGINNER: 'Эхлэгч',
+  INTERMEDIATE: 'Дунд',
+  ADVANCED: 'Дэвшилтэт',
+};
+
+const statusLabels: Record<CourseStatus, string> = {
+  PUBLISHED: 'Нийтлэгдсэн',
+  DRAFT: 'Ноорог',
+  ARCHIVED: 'Архивлагдсан',
+};
 
 const levelColors: Record<CourseLevel, string> = {
   BEGINNER: 'bg-green-100 text-green-700',
@@ -35,7 +69,6 @@ const statusColors: Record<CourseStatus, string> = {
 };
 
 export default function CoursesPage() {
-  const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
 
   const [search, setSearch] = useState('');
@@ -43,6 +76,10 @@ export default function CoursesPage() {
   const [level, setLevel] = useState<CourseLevel | ''>('');
   const [status, setStatus] = useState<CourseStatus | ''>('');
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState('newest');
+  const [priceFilter, setPriceFilter] = useState<'all' | 'free' | 'paid'>('all');
+  const [langFilter, setLangFilter] = useState('');
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const isInstructor = user?.role === 'INSTRUCTOR' || isAdmin;
@@ -61,8 +98,50 @@ export default function CoursesPage() {
     search: debouncedSearch || undefined,
   });
 
-  const courses = data?.data?.items ?? [];
+  const { data: enrollments } = useMyEnrollments();
+  const enrolledCourseIds = useMemo(
+    () => new Set((enrollments ?? []).map((e) => e.courseId)),
+    [enrollments],
+  );
+
+  const rawCourses = data?.data?.items ?? [];
   const meta = data?.data?.meta;
+
+  const allLanguages = useMemo(
+    () => Array.from(new Set(rawCourses.map((c) => c.language).filter(Boolean))).sort(),
+    [rawCourses],
+  );
+
+  const allTags = useMemo(() => {
+    const freq = new Map<string, number>();
+    rawCourses.forEach((c) => c.tags?.forEach((t) => freq.set(t, (freq.get(t) ?? 0) + 1)));
+    return Array.from(freq.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t]) => t);
+  }, [rawCourses]);
+
+  const hasActiveFilters = priceFilter !== 'all' || langFilter !== '' || selectedTags.size > 0;
+
+  const courses = useMemo(() => {
+    let filtered = rawCourses;
+
+    if (priceFilter === 'free') filtered = filtered.filter((c) => Number(c.price) === 0);
+    else if (priceFilter === 'paid') filtered = filtered.filter((c) => Number(c.price) > 0);
+
+    if (langFilter) filtered = filtered.filter((c) => c.language === langFilter);
+
+    if (selectedTags.size > 0) {
+      filtered = filtered.filter((c) => c.tags?.some((t) => selectedTags.has(t)));
+    }
+
+    const sorted = [...filtered];
+    if (sortBy === 'oldest') {
+      sorted.sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime());
+    } else if (sortBy === 'price_asc') {
+      sorted.sort((a, b) => Number(a.price) - Number(b.price));
+    } else if (sortBy === 'price_desc') {
+      sorted.sort((a, b) => Number(b.price) - Number(a.price));
+    }
+    return sorted;
+  }, [rawCourses, priceFilter, langFilter, selectedTags, sortBy]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -76,8 +155,8 @@ export default function CoursesPage() {
               </div>
             </Link>
             <nav className="flex items-center gap-4 text-sm">
-              <Link href="/dashboard" className="text-slate-500 hover:text-slate-800">Dashboard</Link>
-              <span className="font-semibold text-slate-800">Courses</span>
+              <Link href="/dashboard" className="text-slate-500 hover:text-slate-800">Хяналтын самбар</Link>
+              <span className="font-semibold text-slate-800">Сургалтууд</span>
             </nav>
           </div>
 
@@ -87,7 +166,7 @@ export default function CoursesPage() {
                 href="/courses/new"
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
               >
-                + New Course
+                + Шинэ сургалт
               </Link>
             )}
             {isAuthenticated && (
@@ -101,12 +180,12 @@ export default function CoursesPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-8">
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <input
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search courses..."
+            placeholder="Сургалт хайх..."
             className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <select
@@ -129,12 +208,119 @@ export default function CoursesPage() {
               ))}
             </select>
           )}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+          >
+            {SORTS.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Filter pills */}
+        <div className="space-y-2 mb-6">
+          {/* Price filter */}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-xs text-slate-500 w-14 shrink-0">Үнэ:</span>
+            {PRICE_FILTERS.map((pf) => (
+              <button
+                key={pf.value}
+                onClick={() => setPriceFilter(pf.value as 'all' | 'free' | 'paid')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
+                  priceFilter === pf.value
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300',
+                )}
+              >
+                {pf.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Language filter */}
+          {allLanguages.length > 1 && (
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-xs text-slate-500 w-14 shrink-0">Хэл:</span>
+              <button
+                onClick={() => setLangFilter('')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
+                  langFilter === ''
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300',
+                )}
+              >
+                Бүгд
+              </button>
+              {allLanguages.map((lang) => (
+                <button
+                  key={lang}
+                  onClick={() => setLangFilter(lang === langFilter ? '' : lang)}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
+                    langFilter === lang
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300',
+                  )}
+                >
+                  {LANGUAGE_LABELS[lang] ?? lang}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Tag filter */}
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-xs text-slate-500 w-14 shrink-0">Таг:</span>
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    setSelectedTags((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(tag)) next.delete(tag);
+                      else next.add(tag);
+                      return next;
+                    });
+                  }}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
+                    selectedTags.has(tag)
+                      ? 'bg-violet-600 text-white border-violet-600'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-violet-300',
+                  )}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Clear all filters */}
+          {hasActiveFilters && (
+            <div className="flex">
+              <button
+                onClick={() => {
+                  setPriceFilter('all');
+                  setLangFilter('');
+                  setSelectedTags(new Set());
+                }}
+                className="text-xs text-red-500 hover:text-red-700 underline underline-offset-2 transition-colors"
+              >
+                Шүүлтүүр цэвэрлэх ✕
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Results header */}
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-semibold text-slate-800">
-            {meta ? `${meta.total} course${meta.total !== 1 ? 's' : ''}` : 'Courses'}
+            {meta ? `${courses.length} сургалт` : 'Сургалтууд'}
           </h1>
         </div>
 
@@ -164,14 +350,14 @@ export default function CoursesPage() {
         {!isLoading && !error && courses.length === 0 && (
           <div className="text-center py-20">
             <div className="text-5xl mb-4">📚</div>
-            <h2 className="text-lg font-medium text-slate-700 mb-2">No courses found</h2>
-            <p className="text-slate-400 text-sm mb-6">Try adjusting your filters or search terms</p>
+            <h2 className="text-lg font-medium text-slate-700 mb-2">Сургалт олдсонгүй</h2>
+            <p className="text-slate-400 text-sm mb-6">Хайлт эсвэл шүүлтүүрийг өөрчилж үзнэ үү</p>
             {canCreate && (
               <Link
                 href="/courses/new"
                 className="inline-flex px-5 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
               >
-                Create your first course
+                Анхны сургалт үүсгэх
               </Link>
             )}
           </div>
@@ -194,8 +380,17 @@ export default function CoursesPage() {
                     <span className="text-4xl">📖</span>
                   )}
                   <span className={clsx('absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full font-medium', statusColors[course.status])}>
-                    {course.status}
+                    {statusLabels[course.status] ?? course.status}
                   </span>
+                  {enrolledCourseIds.has(course.id) ? (
+                    <span className="absolute top-2 left-2 text-xs px-2 py-0.5 rounded-full font-medium bg-indigo-600 text-white">
+                      Бүртгүүлсэн ✓
+                    </span>
+                  ) : Number(course.price) === 0 ? (
+                    <span className="absolute top-2 left-2 text-xs px-2 py-0.5 rounded-full font-medium bg-green-600 text-white">
+                      Үнэгүй
+                    </span>
+                  ) : null}
                 </div>
 
                 {/* Body */}
@@ -210,19 +405,19 @@ export default function CoursesPage() {
 
                   <div className="flex items-center justify-between">
                     <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium', levelColors[course.level])}>
-                      {course.level}
+                      {levelLabels[course.level] ?? course.level}
                     </span>
                     <span className="text-xs text-slate-500">
-                      {course.totalLessons} lesson{course.totalLessons !== 1 ? 's' : ''}
+                      {course.totalLessons} хичээл
                     </span>
                   </div>
 
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-sm font-semibold text-slate-800">
-                      {Number(course.price) === 0 ? 'Free' : `₮${Number(course.price).toLocaleString()}`}
+                      {Number(course.price) === 0 ? 'Үнэгүй' : `₮${Number(course.price).toLocaleString('mn-MN')}`}
                     </span>
                     {course.totalMinutes > 0 && (
-                      <span className="text-xs text-slate-400">{course.totalMinutes}m</span>
+                      <span className="text-xs text-slate-400">{course.totalMinutes} мин</span>
                     )}
                   </div>
                 </div>
@@ -239,17 +434,17 @@ export default function CoursesPage() {
               disabled={!meta.hasPreviousPage}
               className="px-4 py-2 text-sm rounded-lg border border-slate-300 disabled:opacity-40 hover:bg-slate-50 transition-colors"
             >
-              Previous
+              ← Өмнөх
             </button>
             <span className="px-4 py-2 text-sm text-slate-600">
-              Page {meta.page} of {meta.totalPages}
+              {meta.page} / {meta.totalPages} хуудас
             </span>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={!meta.hasNextPage}
               className="px-4 py-2 text-sm rounded-lg border border-slate-300 disabled:opacity-40 hover:bg-slate-50 transition-colors"
             >
-              Next
+              Дараах →
             </button>
           </div>
         )}

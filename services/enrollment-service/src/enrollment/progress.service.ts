@@ -8,6 +8,7 @@ import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
 import { CourseClientService } from '../course-client/course-client.service';
+import { UserClientService } from '../user-client/user-client.service';
 import { UpdateLessonProgressDto } from './dto/update-lesson-progress.dto';
 import { SubmitBlockAnswersDto, AnswerItemDto } from './dto/submit-block-answers.dto';
 import { BlockQuestion } from '../course-client/course-client.service';
@@ -21,6 +22,7 @@ export class ProgressService {
     private readonly prisma: PrismaService,
     private readonly messaging: MessagingService,
     private readonly courseClient: CourseClientService,
+    private readonly userClient: UserClientService,
   ) {}
 
   async startLesson(enrollmentId: string, lessonId: string, studentId: string) {
@@ -352,11 +354,17 @@ export class ProgressService {
 
     if (allCompleted && !enrollment.completed) {
       let courseTitle: string | undefined;
+      let recipientName: string | undefined;
+
       try {
-        const course = await this.courseClient.getCourseBasic(enrollment.courseId);
+        const [course, profile] = await Promise.all([
+          this.courseClient.getCourseBasic(enrollment.courseId),
+          this.userClient.getProfile(enrollment.studentId),
+        ]);
         courseTitle = course.title;
+        recipientName = this.userClient.getDisplayName(profile);
       } catch (err) {
-        this.logger.warn(`Could not fetch course title for certificate event: ${(err as Error).message}`);
+        this.logger.warn(`Could not fetch course/user info for certificate event: ${(err as Error).message}`);
       }
 
       this.messaging.publishEvent(EventTypes.ENROLLMENT_COMPLETED, {
@@ -365,6 +373,7 @@ export class ProgressService {
         userId: enrollment.studentId,
         studentId: enrollment.studentId,
         courseTitle,
+        recipientName,
         completedAt: updatedEnrollment.completedAt?.toISOString() ?? new Date().toISOString(),
       });
     }

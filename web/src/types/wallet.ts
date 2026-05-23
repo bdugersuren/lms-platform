@@ -1,11 +1,45 @@
 export type WalletStatus = 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
 export type TransactionType =
   | 'CREDIT'
+  | 'WALLET_TOPUP'
   | 'DEBIT'
   | 'REVENUE_SHARE'
   | 'PAYOUT'
   | 'REFUND'
-  | 'PLATFORM_FEE';
+  | 'PLATFORM_FEE'
+  | 'ADMIN_ADJUSTMENT';
+
+export type PaymentProvider = 'QPAY' | 'SOCIAL_PAY' | 'MOCK' | 'WALLET';
+export type PaymentPurpose = 'COURSE_PURCHASE' | 'WALLET_TOPUP';
+export type PaymentStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
+
+export interface Payment {
+  id: string;
+  userId: string;
+  purpose: PaymentPurpose;
+  courseId: string | null;
+  walletOwnerId: string | null;
+  amount: string;
+  currency: string;
+  provider: PaymentProvider;
+  status: PaymentStatus;
+  invoiceId: string | null;
+  qrCode: string | null;
+  qrImage: string | null;
+  deepLinks: { name: string; logo: string; link: string }[] | null;
+  checkoutUrl: string | null;
+  description: string | null;
+  expiredAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreateTopupDto {
+  purpose: 'WALLET_TOPUP';
+  amount: number;
+  provider: PaymentProvider;
+  returnUrl?: string;
+}
 export type TransactionStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REVERSED';
 export type PayoutStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'REJECTED';
 

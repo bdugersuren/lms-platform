@@ -151,10 +151,14 @@ export default function MyCoursesPage() {
                       </div>
                     ) : (
                       <Link
-                        href={`/courses/${enrollment.courseId}`}
+                        href={
+                          enrollment.nextLessonId
+                            ? `/courses/${enrollment.courseId}/lessons/${enrollment.nextLessonId}`
+                            : `/courses/${enrollment.courseId}`
+                        }
                         className="block w-full py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium text-center hover:bg-indigo-700 transition-colors"
                       >
-                        Үргэлжлүүлэх
+                        {enrollment.nextLessonId ? 'Үргэлжлүүлэх →' : 'Эхлэх'}
                       </Link>
                     )}
                   </div>

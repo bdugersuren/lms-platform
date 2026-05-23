@@ -28,59 +28,77 @@ export class CertificateService {
       if (existing) return existing;
     }
 
-    const cert = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.certificate.create({
-        data: {
-          userId,
-          courseId,
-          title,
-          recipientName,
-          description,
-          issuerName: issuerName ?? 'LMS Platform',
-          completedAt: new Date(completedAt),
-          expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-          status: CertificateStatus.ISSUED,
-        },
+    try {
+      const cert = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.certificate.create({
+          data: {
+            userId,
+            courseId,
+            title,
+            recipientName,
+            description,
+            issuerName: issuerName ?? 'LMS Platform',
+            completedAt: new Date(completedAt),
+            expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+            status: CertificateStatus.ISSUED,
+          },
+        });
+
+        await this.outbox.enqueue(tx, {
+          eventId: randomUUID(),
+          eventType: EventTypes.CERTIFICATE_ISSUED,
+          eventVersion: 1,
+          occurredAt: new Date().toISOString(),
+          producer: 'certificate-service',
+          aggregateType: 'certificate',
+          aggregateId: created.id,
+          sequence: 1,
+          payload: {
+            certificateId: created.id,
+            userId,
+            courseId,
+            verifyCode: created.verifyCode,
+          },
+        });
+
+        return created;
       });
 
-      await this.outbox.enqueue(tx, {
-        eventId: randomUUID(),
-        eventType: EventTypes.CERTIFICATE_ISSUED,
-        eventVersion: 1,
-        occurredAt: new Date().toISOString(),
-        producer: 'certificate-service',
-        aggregateType: 'certificate',
-        aggregateId: created.id,
-        sequence: 1,
-        payload: {
-          certificateId: created.id,
-          userId,
-          courseId,
-          verifyCode: created.verifyCode,
-        },
-      });
+      // Generate QR code asynchronously — update record after
+      this.generator
+        .generateQrCode(cert.verifyCode)
+        .then((qrCodeUrl) =>
+          this.prisma.certificate.update({ where: { id: cert.id }, data: { qrCodeUrl } }),
+        )
+        .catch((err) => this.logger.warn(`QR generation failed for ${cert.id}`, err));
 
-      return created;
-    });
-
-    // Generate QR code asynchronously — update record after
-    this.generator
-      .generateQrCode(cert.verifyCode)
-      .then((qrCodeUrl) =>
-        this.prisma.certificate.update({ where: { id: cert.id }, data: { qrCodeUrl } }),
-      )
-      .catch((err) => this.logger.warn(`QR generation failed for ${cert.id}`, err));
-
-    this.logger.log(`Certificate issued: ${cert.id} for user ${userId}`);
-    return cert;
+      this.logger.log(`Certificate issued: ${cert.id} for user ${userId}`);
+      return cert;
+    } catch (err: unknown) {
+      // Partial unique index violation: two concurrent events raced — return the winner
+      if (this.isUniqueViolation(err) && courseId) {
+        this.logger.warn(`Duplicate cert race for userId=${userId} courseId=${courseId}, returning existing`);
+        const existing = await this.prisma.certificate.findFirst({
+          where: { userId, courseId, status: CertificateStatus.ISSUED },
+        });
+        if (existing) return existing;
+      }
+      throw err;
+    }
   }
 
   async findAll(userId: string, query: QueryCertificateDto) {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
+    const includeRevoked = query.includeRevoked === true;
+
+    const statusFilter = includeRevoked
+      ? undefined
+      : { status: CertificateStatus.ISSUED };
+
     const where = {
       userId,
-      status: CertificateStatus.ISSUED,
+      ...statusFilter,
       ...(query.search ? {
         OR: [
           { title: { contains: query.search, mode: 'insensitive' as const } },
@@ -100,7 +118,11 @@ export class CertificateService {
 
   async findOne(id: string, requestingUserId: string, isAdmin = false) {
     const cert = await this.prisma.certificate.findUnique({ where: { id } });
-    if (!cert || cert.status === CertificateStatus.REVOKED) throw new NotFoundException('Certificate not found');
+    if (!cert) throw new NotFoundException('Certificate not found');
+    // Revoked certificate-ийг owner болон admin харж болно
+    if (cert.status === CertificateStatus.REVOKED && !isAdmin && cert.userId !== requestingUserId) {
+      throw new NotFoundException('Certificate not found');
+    }
     if (!isAdmin && cert.userId !== requestingUserId) throw new ForbiddenException('Access denied');
     return cert;
   }
@@ -141,5 +163,9 @@ export class CertificateService {
 
     this.logger.log(`Certificate revoked: ${id}`);
     return updated;
+  }
+
+  private isUniqueViolation(err: unknown): boolean {
+    return (err as { code?: string } | undefined)?.code === 'P2002';
   }
 }

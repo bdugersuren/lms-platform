@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, ProgressStatus } from '@prisma/client';
 import {
   CourseContentEventEnvelope,
   CourseContentEventPatterns,
@@ -81,6 +81,8 @@ export class CourseProjectionService {
         await this.applySnapshot(tx, payload as CourseSnapshotPayload);
         return;
       case CourseContentEventPatterns.LESSON_CREATED:
+        await this.applyLessonCreated(tx, payload as CourseLessonPayload);
+        return;
       case CourseContentEventPatterns.LESSON_UPDATED:
         await this.applyLesson(tx, payload as CourseLessonPayload);
         return;
@@ -116,6 +118,49 @@ export class CourseProjectionService {
     await this.upsertLesson(tx, payload.lesson);
   }
 
+  private async applyLessonCreated(
+    tx: Prisma.TransactionClient,
+    payload: CourseLessonPayload,
+  ): Promise<void> {
+    await this.upsertCourse(tx, payload.course);
+    await this.upsertModule(tx, payload.module);
+    await this.upsertLesson(tx, payload.lesson);
+
+    // Published course дээр lesson нэмэхэд одоо байгаа бүх enrollment-д progress row нэмэх
+    if (payload.course.status !== 'PUBLISHED') return;
+
+    const courseProjection = await tx.courseProjection.findUnique({
+      where: { courseId: payload.course.courseId },
+      select: { isSequential: true },
+    });
+    const isSequential = courseProjection?.isSequential ?? true;
+    const newStatus: ProgressStatus = isSequential ? ProgressStatus.LOCKED : ProgressStatus.IN_PROGRESS;
+    const lessonId = payload.lesson.lessonId;
+
+    const enrollments = await tx.enrollment.findMany({
+      where: { courseId: payload.course.courseId, completed: false },
+      select: { id: true },
+    });
+
+    for (const enrollment of enrollments) {
+      await tx.lessonProgress.upsert({
+        where: { enrollmentId_lessonId: { enrollmentId: enrollment.id, lessonId } },
+        create: { enrollmentId: enrollment.id, lessonId, status: newStatus },
+        update: {},
+      });
+    }
+
+    if (enrollments.length > 0) {
+      this.logger.log(
+        `Added LessonProgress for lessonId=${lessonId} to ${enrollments.length} enrollments in courseId=${payload.course.courseId}`,
+      );
+      // Progress percent-ийг шинэчлэх (нийт lesson нэмэгдсэн учир)
+      for (const enrollment of enrollments) {
+        await this.syncEnrollmentProgressPercent(tx, enrollment.id);
+      }
+    }
+  }
+
   private async applyLessonDeleted(
     tx: Prisma.TransactionClient,
     payload: CourseLessonDeletedPayload,
@@ -125,6 +170,52 @@ export class CourseProjectionService {
     await this.upsertLesson(tx, {
       ...payload.lesson,
       deletedAt: payload.deletedAt,
+    });
+
+    const lessonId = payload.lesson.lessonId;
+
+    // Устгасан lesson-ны прогресс record-уудыг авч enrollmentId-уудыг цуглуулна
+    const affectedProgresses = await tx.lessonProgress.findMany({
+      where: { lessonId },
+      select: { enrollmentId: true },
+    });
+
+    if (affectedProgresses.length === 0) return;
+
+    const enrollmentIds = [...new Set(affectedProgresses.map((lp) => lp.enrollmentId))];
+
+    // LessonProgress record-уудыг устгах
+    await tx.lessonProgress.deleteMany({ where: { lessonId } });
+
+    this.logger.log(
+      `Deleted LessonProgress for lessonId=${lessonId} from ${enrollmentIds.length} enrollments`,
+    );
+
+    // Нөлөөлсөн бүх enrollment-ын прогрессыг дахин тооцоолох
+    for (const enrollmentId of enrollmentIds) {
+      await this.syncEnrollmentProgressPercent(tx, enrollmentId);
+    }
+  }
+
+  private async syncEnrollmentProgressPercent(
+    tx: Prisma.TransactionClient,
+    enrollmentId: string,
+  ): Promise<void> {
+    const progresses = await tx.lessonProgress.findMany({ where: { enrollmentId } });
+    const total = progresses.length;
+    if (total === 0) return;
+
+    const completedCount = progresses.filter((lp) => lp.completed).length;
+    const progressPercent = Math.round((completedCount / total) * 100);
+    const totalScore =
+      progresses.reduce((sum, lp) => sum + (lp.score ?? 0), 0) / total;
+
+    await tx.enrollment.update({
+      where: { id: enrollmentId },
+      data: {
+        progressPercent,
+        totalScore: Math.round(totalScore * 100) / 100,
+      },
     });
   }
 

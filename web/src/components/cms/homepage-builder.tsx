@@ -9,6 +9,7 @@ import { TeacherShowcaseSection } from './teacher-showcase-section';
 import { AnnouncementsSection } from './announcements-section';
 import { FaqSection } from './faq-section';
 import { PartnersSection } from './partners-section';
+import { HowItWorksSection } from './how-it-works-section';
 import type { HomepageSectionType } from '@/types/tenant';
 import type {
   HeroConfig,
@@ -39,6 +40,8 @@ function renderSection(type: HomepageSectionType, config: Record<string, unknown
       return <FaqSection config={config as unknown as FaqConfig} />;
     case 'partners':
       return <PartnersSection config={config as unknown as PartnersConfig} />;
+    case 'how_it_works':
+      return <HowItWorksSection />;
     default:
       return null;
   }

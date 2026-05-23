@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 
@@ -25,9 +25,16 @@ export class TransactionService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(id: string) {
-    const tx = await this.prisma.transaction.findUnique({ where: { id } });
+  async findOne(id: string, requesterId: string) {
+    const tx = await this.prisma.transaction.findUnique({
+      where: { id },
+      include: { wallet: { select: { ownerId: true } } },
+    });
     if (!tx) throw new NotFoundException(`Transaction ${id} not found`);
-    return tx;
+    if (tx.wallet.ownerId !== requesterId) {
+      throw new ForbiddenException('Access denied');
+    }
+    const { wallet: _wallet, ...result } = tx;
+    return result;
   }
 }

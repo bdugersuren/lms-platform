@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { clsx } from 'clsx';
 import type { InteractiveBlock, InteractiveQuestion, QuestionType } from '@/types/course';
+import type { AnswerItem } from '@/hooks/use-enrollment';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,10 +23,12 @@ interface QuestionResult {
 export interface BlockQuizProps {
   block: InteractiveBlock;
   onComplete: (passed: boolean) => void;
+  /** Backend дээр хариулт хадгалах callback — quiz block-т л дуудагдана */
+  onSubmitAnswers?: (blockId: string, answers: AnswerItem[]) => Promise<void>;
   preview?: boolean;
 }
 
-export function BlockQuiz({ block, onComplete, preview }: BlockQuizProps) {
+export function BlockQuiz({ block, onComplete, onSubmitAnswers, preview }: BlockQuizProps) {
   if (block.blockType === 'INFO') {
     return <InfoBlock block={block} onComplete={onComplete} />;
   }
@@ -36,7 +39,7 @@ export function BlockQuiz({ block, onComplete, preview }: BlockQuizProps) {
     return <AiPromptBlock block={block} onComplete={onComplete} />;
   }
   // QUIZ / CHECKPOINT
-  return <QuizBlock block={block} onComplete={onComplete} />;
+  return <QuizBlock block={block} onComplete={onComplete} onSubmitAnswers={onSubmitAnswers} />;
 }
 
 // ─── Info block ───────────────────────────────────────────────────────────────
@@ -160,7 +163,7 @@ function AiPromptBlock({ block, onComplete }: BlockQuizProps) {
 
 // ─── Quiz block ───────────────────────────────────────────────────────────────
 
-function QuizBlock({ block, onComplete }: BlockQuizProps) {
+function QuizBlock({ block, onComplete, onSubmitAnswers }: BlockQuizProps) {
   const questions = block.questions ?? [];
   const maxScore = questions.reduce((s, q) => s + q.score, 0);
 
@@ -171,6 +174,7 @@ function QuizBlock({ block, onComplete }: BlockQuizProps) {
   const [results, setResults] = useState<Record<string, QuestionResult>>({});
   const [earnedScore, setEarnedScore] = useState(0);
   const [passed, setPassed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const blockTypeLabel = block.blockType === 'CHECKPOINT' ? 'Шалгалт' : 'Тест';
   const blockBg = block.blockType === 'CHECKPOINT'
@@ -210,9 +214,12 @@ function QuizBlock({ block, onComplete }: BlockQuizProps) {
 
   const allAnswered = questions.every(isAnswered);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    setSubmitting(true);
     const newResults: Record<string, QuestionResult> = {};
     let earned = 0;
+
+    const answerItems: AnswerItem[] = [];
 
     for (const q of questions) {
       const ans = answers[q.id];
@@ -231,13 +238,17 @@ function QuizBlock({ block, onComplete }: BlockQuizProps) {
         isCorrect = sel.size === cor.size && Array.from(sel).every((id) => cor.has(id));
         scoreAwarded = isCorrect ? q.score : 0;
       } else {
-        // SHORT_TEXT, ORDERING, MATCHING — flag for AI/manual eval
         isCorrect = null;
         scoreAwarded = 0;
       }
 
       earned += scoreAwarded;
       newResults[q.id] = { isCorrect, correctOptionIds: correctIds, scoreAwarded };
+      answerItems.push({
+        questionId: q.id,
+        selectedOptionIds: ans.selectedOptionIds.length > 0 ? ans.selectedOptionIds : undefined,
+        answerText: ans.textAnswer.trim() || undefined,
+      });
     }
 
     const percent = maxScore > 0 ? (earned / maxScore) * 100 : 100;
@@ -247,6 +258,12 @@ function QuizBlock({ block, onComplete }: BlockQuizProps) {
     setEarnedScore(earned);
     setPassed(hasPassed);
     setSubmitted(true);
+    setSubmitting(false);
+
+    // Backend-д хариулт хадгалах (fire & forget — UI feedback-д нөлөөлөхгүй)
+    if (onSubmitAnswers) {
+      onSubmitAnswers(block.id, answerItems).catch(() => {});
+    }
   };
 
   const handleRetry = () => {
@@ -323,10 +340,10 @@ function QuizBlock({ block, onComplete }: BlockQuizProps) {
           {!submitted ? (
             <button
               onClick={handleSubmit}
-              disabled={!allAnswered || questions.length === 0}
+              disabled={!allAnswered || questions.length === 0 || submitting}
               className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              Шалгах
+              {submitting ? 'Илгээж байна...' : 'Шалгах'}
             </button>
           ) : (
             <>

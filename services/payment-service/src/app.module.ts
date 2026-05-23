@@ -33,6 +33,8 @@ import { OutboxModule } from './outbox/outbox.module';
         SOCIALPAY_TERMINAL_ID: Joi.string().optional().allow(''),
         SOCIALPAY_SECRET_KEY: Joi.string().optional().allow(''),
         SOCIALPAY_CALLBACK_URL: Joi.string().optional(),
+        WALLET_SERVICE_URL: Joi.string().default('http://wallet-service:3009'),
+        INTERNAL_SERVICE_SECRET: Joi.string().default('internal-secret'),
       }),
       validationOptions: { allowUnknown: true, abortEarly: false },
     }),

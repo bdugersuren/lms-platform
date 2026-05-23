@@ -1,9 +1,10 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Post, UseGuards, Headers, UnauthorizedException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { WalletService } from './wallet.service';
+import { ConfigService } from '@nestjs/config';
 
 interface JwtUser { sub: string; email: string; role: string }
 
@@ -48,5 +49,35 @@ export class WalletController {
       'CREDIT',
     );
     return ApiResponseBuilder.success(data, `₮${Number(body.amount).toLocaleString()} цэнэглэгдлээ`);
+  }
+}
+
+@ApiTags('Wallet Internal')
+@Controller('wallet/internal')
+export class WalletInternalController {
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly config: ConfigService,
+  ) {}
+
+  @Post('deduct')
+  @ApiOperation({ summary: '[Internal] Deduct wallet balance — service-to-service only' })
+  async deduct(
+    @Headers('x-internal-secret') secret: string,
+    @Body() body: { ownerId: string; amount: number; description: string; reference?: string },
+  ) {
+    const expected = this.config.get<string>('INTERNAL_SERVICE_SECRET', 'internal-secret');
+    if (secret !== expected) throw new UnauthorizedException('Invalid internal secret');
+    if (!body.ownerId || !body.amount || body.amount <= 0) {
+      throw new BadRequestException('ownerId and positive amount required');
+    }
+    const data = await this.walletService.debit(
+      body.ownerId,
+      Number(body.amount),
+      body.description ?? 'Хэтэвчээр төлбөр',
+      'DEBIT',
+      body.reference,
+    );
+    return ApiResponseBuilder.success(data);
   }
 }

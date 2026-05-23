@@ -31,7 +31,7 @@ export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create payment (QPay or SocialPay)' })
+  @ApiOperation({ summary: 'Create payment (COURSE_PURCHASE or WALLET_TOPUP)' })
   async create(@CurrentUser() user: JwtUser, @Body() dto: CreatePaymentDto) {
     const data = await this.paymentService.create(user.sub, dto);
     return ApiResponseBuilder.success(data, 'Payment created');
@@ -45,18 +45,19 @@ export class PaymentController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get payment by ID' })
+  @ApiOperation({ summary: 'Get payment by ID (owner only)' })
   @ApiParam({ name: 'id', type: 'string' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    const data = await this.paymentService.findById(id);
+  async findOne(@CurrentUser() user: JwtUser, @Param('id', ParseUUIDPipe) id: string) {
+    const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+    const data = await this.paymentService.findById(id, user.sub, isAdmin);
     return ApiResponseBuilder.success(data);
   }
 
   @Post(':id/check')
-  @ApiOperation({ summary: 'Manually check payment status with provider' })
+  @ApiOperation({ summary: 'Manually check payment status with provider (owner only)' })
   @ApiParam({ name: 'id', type: 'string' })
-  async checkPayment(@Param('id', ParseUUIDPipe) id: string) {
-    const data = await this.paymentService.checkPayment(id);
+  async checkPayment(@CurrentUser() user: JwtUser, @Param('id', ParseUUIDPipe) id: string) {
+    const data = await this.paymentService.checkPayment(id, user.sub);
     return ApiResponseBuilder.success(data, `Payment status: ${data.status}`);
   }
 }

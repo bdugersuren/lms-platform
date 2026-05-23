@@ -63,6 +63,8 @@ model Course {
   status       CourseStatus @default(DRAFT)
   tags         String[]     @default([])
   language     String       @default("mn")
+  whatYouLearn String[]     @default([]) @map("what_you_learn")
+  requirements String[]     @default([]) @map("requirements")
   totalLessons Int          @default(0) @map("total_lessons")
   totalMinutes Int          @default(0) @map("total_minutes")
   passingScore Float        @default(60) @map("passing_score")

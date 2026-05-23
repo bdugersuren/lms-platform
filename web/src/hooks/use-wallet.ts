@@ -6,8 +6,10 @@ import type {
   RevenueShare,
   RevenueSummary,
   Payout,
+  Payment,
   Paginated,
   CreatePayoutDto,
+  CreateTopupDto,
 } from '@/types/wallet';
 
 interface ApiSuccess<T> { success: boolean; data: T; message?: string }
@@ -101,6 +103,24 @@ export function useDevTopup() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['wallet'] });
+    },
+  });
+}
+
+export function useCreateTopup() {
+  return useMutation<Payment, Error, CreateTopupDto>({
+    mutationFn: async (dto) => {
+      const { data } = await api.post<ApiSuccess<Payment>>('/payments', dto);
+      return data.data;
+    },
+  });
+}
+
+export function useCheckPayment() {
+  return useMutation<Payment, Error, string>({
+    mutationFn: async (paymentId) => {
+      const { data } = await api.post<ApiSuccess<Payment>>(`/payments/${paymentId}/check`);
+      return data.data;
     },
   });
 }

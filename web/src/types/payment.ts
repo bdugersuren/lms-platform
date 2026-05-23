@@ -1,4 +1,4 @@
-export type PaymentProvider = 'QPAY' | 'SOCIAL_PAY' | 'MOCK';
+export type PaymentProvider = 'QPAY' | 'SOCIAL_PAY' | 'MOCK' | 'WALLET';
 
 export type PaymentStatus =
   | 'PENDING'

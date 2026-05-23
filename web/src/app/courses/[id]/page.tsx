@@ -9,6 +9,8 @@ import { useCreatePayment } from '@/hooks/use-payment';
 import { useCertificates } from '@/hooks/use-certificate';
 import { useMe } from '@/hooks/use-auth';
 import { useAuthStore } from '@/store/auth.store';
+import { usePublicProfile } from '@/hooks/use-profile';
+import { useMyWallet } from '@/hooks/use-wallet';
 import type { CourseModule } from '@/types/course';
 import { clsx } from 'clsx';
 
@@ -47,6 +49,8 @@ export default function CourseDetailPage() {
   const [enrollError, setEnrollError] = useState('');
 
   const course = data?.data;
+  const { data: instructorProfile } = usePublicProfile(course?.instructorId);
+  const { data: wallet } = useMyWallet();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
   const isOwner = course?.instructorId === user?.id;
   const canManage = isOwner || isAdmin;
@@ -56,7 +60,7 @@ export default function CourseDetailPage() {
     [certificates, id],
   );
 
-  const handleBuy = () => {
+  const handleBuy = (provider: 'QPAY' | 'SOCIAL_PAY' | 'WALLET' = 'QPAY') => {
     if (!course) return;
     if (!isAuthenticated) { router.push('/login'); return; }
     setEnrollError('');
@@ -64,11 +68,17 @@ export default function CourseDetailPage() {
       {
         courseId: id,
         amount: Number(course.price),
-        provider: 'MOCK',
+        provider,
         description: `Сургалт: ${course.title}`,
       },
       {
-        onSuccess: (payment) => router.push(`/payments/${payment.id}`),
+        onSuccess: (payment) => {
+          if (provider === 'WALLET') {
+            void router.push(`/courses/${id}`);
+          } else {
+            void router.push(`/payments/${payment.id}`);
+          }
+        },
         onError: (err) => setEnrollError(err.message),
       },
     );
@@ -129,8 +139,8 @@ export default function CourseDetailPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-500 mb-4">{error?.message ?? 'Course not found'}</p>
-          <Link href="/courses" className="text-indigo-600 hover:underline text-sm">Back to courses</Link>
+          <p className="text-red-500 mb-4">{error?.message ?? 'Сургалт олдсонгүй'}</p>
+          <Link href="/courses" className="text-indigo-600 hover:underline text-sm">Сургалтууд руу буцах</Link>
         </div>
       </div>
     );
@@ -225,12 +235,34 @@ export default function CourseDetailPage() {
           </div>
         ) : isPaidCourse ? (
           <div className="space-y-2">
+            {/* Wallet payment — only if balance sufficient */}
+            {wallet && Number(wallet.balance) >= Number(course.price) && (
+              <button
+                onClick={() => handleBuy('WALLET')}
+                disabled={createPayment.isPending}
+                className="w-full py-3 bg-violet-600 text-white rounded-lg font-bold text-sm hover:bg-violet-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+              >
+                💳 Хэтэвчээр төлөх — ₮{Number(course.price).toLocaleString('mn-MN')}
+              </button>
+            )}
+            {wallet && (
+              <p className="text-xs text-slate-400 text-center">
+                Хэтэвч: ₮{Number(wallet.balance).toLocaleString('mn-MN')}
+              </p>
+            )}
             <button
-              onClick={handleBuy}
+              onClick={() => handleBuy('QPAY')}
               disabled={createPayment.isPending}
-              className="w-full py-3.5 bg-indigo-600 text-white rounded-lg font-bold text-base hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+              className="w-full py-3 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 disabled:opacity-60 transition-colors"
             >
-              {createPayment.isPending ? 'Боловсруулж байна...' : 'Худалдан авах'}
+              {createPayment.isPending ? 'Боловсруулж байна...' : 'QPay QR-аар төлөх'}
+            </button>
+            <button
+              onClick={() => handleBuy('SOCIAL_PAY')}
+              disabled={createPayment.isPending}
+              className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-60 transition-colors"
+            >
+              SocialPay-аар төлөх
             </button>
             <p className="text-xs text-center text-slate-400">Буцаан олголт 30 хоногийн дотор</p>
           </div>
@@ -283,11 +315,21 @@ export default function CourseDetailPage() {
           <span className="text-slate-400">📱</span>
           <span>Утас болон PC-д нэвтрэх</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400">🏆</span>
-          <span>Гэрчилгээ олгогдоно</span>
+        <div className="flex items-start gap-2">
+          <span className="text-slate-400 shrink-0">🏆</span>
+          <div>
+            <span>Гэрчилгээ олгогдоно</span>
+            <p className="text-xs text-slate-400 mt-0.5">Бүх хичээлийг дуусгасны дараа автоматаар олгогдоно</p>
+          </div>
         </div>
       </div>
+
+      {/* Payment options note for paid courses */}
+      {isPaidCourse && !isEnrolled && (
+        <div className="border-t border-slate-100 pt-3">
+          <p className="text-xs text-slate-400 text-center">QPay · SocialPay · Хэтэвч</p>
+        </div>
+      )}
     </div>
   );
 
@@ -314,14 +356,14 @@ export default function CourseDetailPage() {
                 'bg-yellow-500/20 text-yellow-400': course.level === 'INTERMEDIATE',
                 'bg-red-500/20 text-red-400': course.level === 'ADVANCED',
               })}>
-                {course.level}
+                {course.level === 'BEGINNER' ? 'Эхлэгч' : course.level === 'INTERMEDIATE' ? 'Дунд' : 'Дэвшилтэт'}
               </span>
               <span className={clsx('text-xs px-2.5 py-0.5 rounded-full font-semibold', {
                 'bg-emerald-500/20 text-emerald-400': course.status === 'PUBLISHED',
                 'bg-slate-500/20 text-slate-400': course.status === 'DRAFT',
                 'bg-orange-500/20 text-orange-400': course.status === 'ARCHIVED',
               })}>
-                {course.status}
+                {course.status === 'PUBLISHED' ? 'Нийтлэгдсэн' : course.status === 'DRAFT' ? 'Ноорог' : 'Архивлагдсан'}
               </span>
               {course.tags.map((tag) => (
                 <span key={tag} className="text-xs bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full">{tag}</span>
@@ -403,15 +445,32 @@ export default function CourseDetailPage() {
           {/* White content area */}
           <div className="bg-white px-6 sm:px-10 py-8 space-y-8">
             {/* What you'll learn */}
-            {course.modules.length > 0 && (
+            {(course.whatYouLearn?.length > 0 || course.modules.length > 0) && (
               <section>
                 <h2 className="text-xl font-bold text-slate-900 mb-4">Юу сурах вэ</h2>
                 <div className="border border-slate-200 rounded-xl p-6">
                   <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {course.modules.map((mod: CourseModule) => (
-                      <li key={mod.id} className="flex items-start gap-3 text-sm text-slate-700">
+                    {(course.whatYouLearn?.length > 0 ? course.whatYouLearn : course.modules.map((m: CourseModule) => m.title)).map((item: string, i: number) => (
+                      <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
                         <span className="text-indigo-600 mt-0.5 shrink-0 font-bold">✓</span>
-                        <span>{mod.title}</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            )}
+
+            {/* Requirements / Prerequisites */}
+            {course.requirements?.length > 0 && (
+              <section>
+                <h2 className="text-xl font-bold text-slate-900 mb-4">Урьдчилсан шаардлага</h2>
+                <div className="border border-slate-200 rounded-xl p-6">
+                  <ul className="space-y-2">
+                    {course.requirements.map((req: string, i: number) => (
+                      <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
+                        <span className="text-amber-500 mt-0.5 shrink-0">›</span>
+                        <span>{req}</span>
                       </li>
                     ))}
                   </ul>
@@ -490,6 +549,37 @@ export default function CourseDetailPage() {
                 </div>
               )}
             </section>
+
+            {/* Instructor card */}
+            {instructorProfile && (
+              <section>
+                <h2 className="text-xl font-bold text-slate-900 mb-4">Багш</h2>
+                <div className="flex items-start gap-4 p-5 border border-slate-200 rounded-xl">
+                  {instructorProfile.avatarUrl ? (
+                    <img
+                      src={instructorProfile.avatarUrl}
+                      alt={instructorProfile.displayName}
+                      className="w-12 h-12 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                      <span className="text-indigo-600 font-bold text-lg">
+                        {instructorProfile.displayName?.charAt(0) ?? '?'}
+                      </span>
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">{instructorProfile.displayName}</p>
+                    {instructorProfile.headline && (
+                      <p className="text-sm text-slate-500 mt-0.5">{instructorProfile.headline}</p>
+                    )}
+                    {instructorProfile.bio && (
+                      <p className="text-sm text-slate-600 mt-2 line-clamp-2">{instructorProfile.bio}</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
           </div>
         </div>
 

@@ -28,6 +28,7 @@ import { AdminModule } from './admin/admin.module';
         JWT_SECRET: Joi.string().min(32).required(),
         RABBITMQ_URL: Joi.string().required(),
         RABBITMQ_EXCHANGE: Joi.string().default('lms.events'),
+        INTERNAL_SERVICE_SECRET: Joi.string().default('internal-secret'),
       }),
       validationOptions: { allowUnknown: true, abortEarly: false },
     }),

@@ -9,6 +9,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { CourseClientModule } from './course-client/course-client.module';
+import { UserClientModule } from './user-client/user-client.module';
 import { EnrollmentModule } from './enrollment/enrollment.module';
 import { EventListenerModule } from './events/events.module';
 import { AdminModule } from './admin/admin.module';
@@ -27,6 +28,7 @@ import { EventFailureModule } from './event-failure/event-failure.module';
         RABBITMQ_URL: Joi.string().required(),
         RABBITMQ_EXCHANGE: Joi.string().default('lms.events'),
         COURSE_SERVICE_URL: Joi.string().default('http://course-service:3003'),
+        USER_SERVICE_URL: Joi.string().default('http://user-service:3014'),
       }),
       validationOptions: { allowUnknown: true, abortEarly: false },
     }),
@@ -39,6 +41,7 @@ import { EventFailureModule } from './event-failure/event-failure.module';
     HealthModule,
     AuthModule,
     CourseClientModule,
+    UserClientModule,
     EnrollmentModule,
     EventListenerModule,
     AdminModule,

@@ -22,7 +22,7 @@ export class UpdateProfileDto {
 
   @ApiPropertyOptional({ example: 'https://cdn.example.com/avatar.jpg' })
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ require_tld: false })
   avatarUrl?: string;
 
   @ApiPropertyOptional({ example: 'Software engineer and lifelong learner.', maxLength: 500 })

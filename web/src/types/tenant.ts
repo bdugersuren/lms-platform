@@ -62,7 +62,8 @@ export type HomepageSectionType =
   | 'announcements'
   | 'pricing'
   | 'partners'
-  | 'faq';
+  | 'faq'
+  | 'how_it_works';
 
 export type HomepageSection = {
   id: string;

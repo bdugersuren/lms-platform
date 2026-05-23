@@ -18,12 +18,14 @@ enum WalletStatus {
 }
 
 enum TransactionType {
-  CREDIT          // Орлого нэмэх
-  DEBIT           // Зарцуулалт
-  REVENUE_SHARE   // Орлого хуваалцах (instructor)
-  PAYOUT          // Гадагш гаргах
-  REFUND          // Буцаалт
-  PLATFORM_FEE    // Платформ хураамж
+  CREDIT            // Ерөнхий орлого
+  WALLET_TOPUP      // Хэтэвч цэнэглэлт (payment-service-ээс)
+  DEBIT             // Зарцуулалт
+  REVENUE_SHARE     // Орлого хуваалцах (instructor)
+  PAYOUT            // Гадагш гаргах
+  REFUND            // Буцаалт
+  PLATFORM_FEE      // Платформ хураамж
+  ADMIN_ADJUSTMENT  // Админ тохируулга
 }
 
 enum TransactionStatus {
@@ -68,7 +70,7 @@ model Transaction {
   balanceAfter  Decimal         @map("balance_after") @db.Decimal(18, 2)
   currency    String            @default("MNT")
   description String?
-  reference   String?           // External reference (payment ID, etc.)
+  reference   String?           @unique // idempotency — нэг paymentId-аар давхар credit хийхгүй
   metadata    Json?
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
@@ -76,7 +78,6 @@ model Transaction {
   wallet Wallet @relation(fields: [walletId], references: [id])
 
   @@index([walletId])
-  @@index([reference])
   @@index([type])
   @@map("transactions")
 }

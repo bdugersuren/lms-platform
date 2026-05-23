@@ -1,15 +1,18 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
 
 @Injectable()
 export class WalletService {
+  private readonly logger = new Logger(WalletService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly messaging: MessagingService,
@@ -46,7 +49,7 @@ export class WalletService {
     ownerId: string,
     amount: number,
     description: string,
-    type: 'CREDIT' | 'REVENUE_SHARE' | 'REFUND' = 'CREDIT',
+    type: 'CREDIT' | 'WALLET_TOPUP' | 'REVENUE_SHARE' | 'REFUND' | 'ADMIN_ADJUSTMENT' = 'CREDIT',
     reference?: string,
   ) {
     if (amount <= 0) throw new BadRequestException('Amount must be positive');
@@ -64,18 +67,30 @@ export class WalletService {
         data: { balance: balanceAfter },
       });
 
-      return tx.transaction.create({
-        data: {
-          walletId: wallet.id,
-          type,
-          status: 'COMPLETED',
-          amount: new Decimal(amount),
-          balanceBefore,
-          balanceAfter,
-          description,
-          reference,
-        },
-      });
+      try {
+        return await tx.transaction.create({
+          data: {
+            walletId: wallet.id,
+            type,
+            status: 'COMPLETED',
+            amount: new Decimal(amount),
+            balanceBefore,
+            balanceAfter,
+            description,
+            reference,
+          },
+        });
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          reference
+        ) {
+          this.logger.warn(`Duplicate credit reference=${reference} — returning existing transaction (idempotent)`);
+          return tx.transaction.findUniqueOrThrow({ where: { reference } });
+        }
+        throw err;
+      }
     });
   }
 
@@ -84,7 +99,7 @@ export class WalletService {
     ownerId: string,
     amount: number,
     description: string,
-    type: 'DEBIT' | 'PAYOUT' | 'PLATFORM_FEE' = 'DEBIT',
+    type: 'DEBIT' | 'PAYOUT' | 'PLATFORM_FEE' | 'ADMIN_ADJUSTMENT' = 'DEBIT',
     reference?: string,
   ) {
     if (amount <= 0) throw new BadRequestException('Amount must be positive');

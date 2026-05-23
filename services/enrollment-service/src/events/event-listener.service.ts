@@ -22,6 +22,16 @@ export class EventListenerService {
 
   @EventPattern(EventTypes.PAYMENT_CONFIRMED)
   async onPaymentConfirmed(@Payload() event: PaymentConfirmedPayload): Promise<void> {
+    if (event.purpose !== 'COURSE_PURCHASE') {
+      this.logger.debug(`Skipping enrollment for purpose=${event.purpose} paymentId=${event.paymentId}`);
+      return;
+    }
+
+    if (!event.courseId) {
+      this.logger.warn(`COURSE_PURCHASE event missing courseId, paymentId=${event.paymentId} — skipping`);
+      return;
+    }
+
     this.logger.log(
       `Payment confirmed — auto-enrolling userId=${event.userId} courseId=${event.courseId} paymentId=${event.paymentId}`,
     );

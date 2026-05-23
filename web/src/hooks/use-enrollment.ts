@@ -21,6 +21,7 @@ export interface Enrollment {
   completed: boolean;
   enrolledAt: string;
   completedAt: string | null;
+  nextLessonId?: string | null;
   lessonProgresses?: LessonProgress[];
   course?: {
     id: string;
@@ -154,6 +155,42 @@ export function useUpdateLessonProgress() {
     },
     onSuccess: (_data, { enrollmentId }) => {
       void qc.invalidateQueries({ queryKey: ['enrollments', enrollmentId] });
+    },
+  });
+}
+
+export interface AnswerItem {
+  questionId: string;
+  selectedOptionIds?: string[];
+  answerText?: string;
+}
+
+export interface BlockSubmitResult {
+  interactiveBlockId: string;
+  score: number;
+  maxScore: number;
+  scorePercent: number;
+  passed: boolean;
+}
+
+export function useSubmitBlockAnswers() {
+  return useMutation({
+    mutationFn: async ({
+      enrollmentId,
+      lessonId,
+      interactiveBlockId,
+      answers,
+    }: {
+      enrollmentId: string;
+      lessonId: string;
+      interactiveBlockId: string;
+      answers: AnswerItem[];
+    }) => {
+      const res = await api.post<{ data: BlockSubmitResult }>(
+        `/enrollments/${enrollmentId}/progress/${lessonId}/blocks/${interactiveBlockId}/submit`,
+        { answers },
+      );
+      return res.data.data;
     },
   });
 }
