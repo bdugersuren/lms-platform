@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -127,6 +128,14 @@ export class EnrollmentService {
       where: { tenantId_courseId_studentId: { tenantId, courseId: dto.courseId, studentId } },
     });
     if (existing) throw new ConflictException('Already enrolled in this course');
+
+    const course = await this.courseClient.getCourse(dto.courseId);
+    const price = parseFloat(course.price ?? '0');
+    if (price > 0) {
+      throw new BadRequestException(
+        'Төлбөртэй хичээл. Эхлээд POST /api/payments { provider:"WALLET" } ашиглан худалдан авна уу.',
+      );
+    }
 
     const lessonProgressData = await this.buildLessonProgressRows(dto.courseId);
 

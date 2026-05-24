@@ -43,6 +43,23 @@ export class PaymentService {
       throw new BadRequestException('Amount must be at least 1000');
     }
 
+    if (!isTopup) {
+      const courseServiceUrl = process.env.COURSE_SERVICE_URL ?? 'http://course-service:3003';
+      try {
+        const resp = await axios.get(`${courseServiceUrl}/api/courses/${dto.courseId}`);
+        const coursePrice = new Decimal(resp.data?.data?.price ?? '0');
+        if (coursePrice.lessThanOrEqualTo(0)) {
+          throw new BadRequestException('Үнэгүй хичээлд төлбөр шаардахгүй. Шууд бүртгэл хийнэ үү.');
+        }
+        if (!amount.equals(coursePrice)) {
+          throw new BadRequestException(`Дүн буруу байна. Хичээлийн үнэ: ${coursePrice.toFixed(2)}`);
+        }
+      } catch (err: any) {
+        if (err instanceof BadRequestException) throw err;
+        this.logger.warn(`Course price validation skipped: ${err.message}`);
+      }
+    }
+
     const description =
       dto.description ?? (isTopup ? 'Хэтэвч цэнэглэлт' : `Course payment — ${dto.courseId}`);
 
@@ -63,11 +80,11 @@ export class PaymentService {
 
     try {
       if (dto.provider === PaymentProviderDto.WALLET) {
-        const walletServiceUrl = process.env.WALLET_SERVICE_URL ?? 'http://wallet-service:3009';
+        const walletServiceUrl = process.env.WALLET_SERVICE_URL ?? 'http://wallet-service:3007';
         const internalSecret = process.env.INTERNAL_SERVICE_SECRET ?? 'internal-secret';
         try {
           await axios.post(
-            `${walletServiceUrl}/wallet/internal/deduct`,
+            `${walletServiceUrl}/api/wallet/internal/deduct`,
             {
               ownerId: userId,
               amount: dto.amount,

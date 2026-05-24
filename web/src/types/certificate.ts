@@ -1,4 +1,4 @@
-export type CertificateStatus = 'ISSUED' | 'REVOKED';
+export type CertificateStatus = 'PENDING' | 'ISSUED' | 'REVOKED';
 
 export interface Certificate {
   id: string;
@@ -28,6 +28,7 @@ export interface CertificateList {
 
 export interface VerifyResult {
   valid: boolean;
+  pending: boolean;
   certificate: Certificate;
 }
 

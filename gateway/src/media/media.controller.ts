@@ -10,6 +10,11 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { FastifyRequest } from 'fastify';
+import { createWriteStream, createReadStream, statSync, unlinkSync } from 'fs';
+import { pipeline } from 'stream/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { randomUUID } from 'crypto';
 import { JwtAuthGuard, RolesGuard, Roles } from '@lms/shared-auth';
 import { UserRole } from '@lms/shared-types';
 import { ApiResponseBuilder } from '@lms/shared-utils';
@@ -41,29 +46,28 @@ export class MediaController {
   @ApiOperation({ summary: 'Upload a file to object storage' })
   async upload(@Req() req: FastifyRequest) {
     const file = await (req as any).file({ limits: { fileSize: MAX_SIZE } });
-
     if (!file) throw new BadRequestException('No file provided');
 
     const mimeType: string = file.mimetype ?? '';
     const originalName: string = file.filename ?? 'file';
 
-    // Collect stream into buffer to get size
-    const chunks: Buffer[] = [];
-    for await (const chunk of file.file) {
-      chunks.push(chunk as Buffer);
+    // Write to a temp file so we can get the exact size without buffering the entire file in RAM.
+    // MinIO v8 requires a non-negative size for putObject; -1 is rejected.
+    const tmpPath = join(tmpdir(), `lms-upload-${randomUUID()}`);
+    try {
+      await pipeline(file.file, createWriteStream(tmpPath));
+
+      if ((file.file as any).truncated) {
+        throw new PayloadTooLargeException('File exceeds 500 MB limit');
+      }
+
+      const { size } = statSync(tmpPath);
+      if (size === 0) throw new BadRequestException('Empty file');
+
+      const result = await this.media.upload(createReadStream(tmpPath), originalName, mimeType, size);
+      return ApiResponseBuilder.success(result, 'File uploaded successfully');
+    } finally {
+      try { unlinkSync(tmpPath); } catch { /* best-effort cleanup */ }
     }
-    const buffer = Buffer.concat(chunks);
-
-    if (buffer.length > MAX_SIZE) {
-      throw new PayloadTooLargeException('File exceeds 500 MB limit');
-    }
-    if (buffer.length === 0) throw new BadRequestException('Empty file');
-
-    const { Readable } = await import('stream');
-    const stream = Readable.from(buffer);
-
-    const result = await this.media.upload(stream, originalName, mimeType, buffer.length);
-
-    return ApiResponseBuilder.success(result, 'File uploaded successfully');
   }
 }

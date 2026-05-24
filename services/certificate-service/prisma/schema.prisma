@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum CertificateStatus {
+  PENDING
   ISSUED
   REVOKED
 }

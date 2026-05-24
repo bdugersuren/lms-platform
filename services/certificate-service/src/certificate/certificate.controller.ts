@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -74,6 +75,19 @@ export class CertificateController {
     const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role as UserRole);
     const data = await this.service.findOne(id, user.sub, isAdmin, tenantId);
     return ApiResponseBuilder.success(data);
+  }
+
+  @Patch(':id/confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Сурагч өөрийн PENDING гэрчилгээг баталгаажуулна → ISSUED болно' })
+  async confirm(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const data = await this.service.confirm(id, user.sub, tenantId);
+    return ApiResponseBuilder.success(data, 'Гэрчилгээ амжилттай баталгаажлаа');
   }
 
   @Delete(':id')

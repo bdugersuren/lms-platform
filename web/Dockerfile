@@ -57,6 +57,9 @@ COPY web/postcss.config.mjs        ./
 ARG NEXT_PUBLIC_API_URL=/api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+ARG NEXT_PUBLIC_DEV_TOOLS=false
+ENV NEXT_PUBLIC_DEV_TOOLS=$NEXT_PUBLIC_DEV_TOOLS
+
 RUN pnpm run build
 
 # ── Runner: Next.js standalone server ────────────────────────────────────────

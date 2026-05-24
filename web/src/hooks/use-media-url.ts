@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 
 function isExternalEmbed(url: string): boolean {
@@ -14,49 +14,68 @@ interface MediaUrlState {
   mediaUrl: string | null;
   loading: boolean;
   error: string | null;
+  refresh: () => void;
 }
 
 export function useMediaUrl(rawUrl: string | null | undefined): MediaUrlState {
-  const [state, setState] = useState<MediaUrlState>({
-    mediaUrl: null,
-    loading: false,
-    error: null,
-  });
+  const [fetchKey, setFetchKey] = useState(0);
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(() => setFetchKey((k) => k + 1), []);
 
   useEffect(() => {
     if (!rawUrl) {
-      setState({ mediaUrl: null, loading: false, error: null });
+      setMediaUrl(null);
+      setLoading(false);
+      setError(null);
       return;
     }
 
     // External embeds (YouTube, Vimeo) — no presigning needed
     if (isExternalEmbed(rawUrl)) {
-      setState({ mediaUrl: rawUrl, loading: false, error: null });
+      setMediaUrl(rawUrl);
+      setLoading(false);
+      setError(null);
       return;
     }
 
     let cancelled = false;
-    setState({ mediaUrl: null, loading: true, error: null });
+    let refreshTimer: ReturnType<typeof setTimeout>;
+
+    setMediaUrl(null);
+    setLoading(true);
+    setError(null);
 
     api
       .get<{ data: { presignedUrl: string; expiresAt: string } }>('/media/presign', {
         params: { src: rawUrl },
       })
       .then((res) => {
-        if (!cancelled) {
-          setState({ mediaUrl: res.data.data.presignedUrl, loading: false, error: null });
-        }
+        if (cancelled) return;
+        const { presignedUrl, expiresAt } = res.data.data;
+        setMediaUrl(presignedUrl);
+        setLoading(false);
+        setError(null);
+
+        // Proactively refresh 5 minutes before expiry to avoid mid-playback interruption
+        const msUntilExpiry = new Date(expiresAt).getTime() - Date.now();
+        const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 30_000);
+        refreshTimer = setTimeout(() => setFetchKey((k) => k + 1), refreshIn);
       })
       .catch((err: Error) => {
-        if (!cancelled) {
-          setState({ mediaUrl: null, loading: false, error: err.message });
-        }
+        if (cancelled) return;
+        setMediaUrl(null);
+        setLoading(false);
+        setError(err.message);
       });
 
     return () => {
       cancelled = true;
+      clearTimeout(refreshTimer);
     };
-  }, [rawUrl]);
+  }, [rawUrl, fetchKey]);
 
-  return state;
+  return { mediaUrl, loading, error, refresh };
 }

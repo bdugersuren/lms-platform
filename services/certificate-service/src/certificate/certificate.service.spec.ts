@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { CertificateStatus } from '@prisma/client';
 import { EventTypes } from '@lms/shared-types';
 import { CertificateService } from './certificate.service';
@@ -91,7 +91,7 @@ describe('CertificateService', () => {
       completedAt: '2024-01-15T00:00:00.000Z',
     };
 
-    it('returns existing certificate when same userId+courseId already ISSUED (idempotency)', async () => {
+    it('returns existing certificate when same userId+courseId already ISSUED or PENDING (idempotency)', async () => {
       const existing = makeCert();
       mockPrisma.certificate.findFirst.mockResolvedValue(existing);
 
@@ -99,7 +99,11 @@ describe('CertificateService', () => {
 
       expect(mockPrisma.certificate.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ userId: 'user-1', courseId: 'course-1', status: CertificateStatus.ISSUED }),
+          where: expect.objectContaining({
+            userId: 'user-1',
+            courseId: 'course-1',
+            status: { in: [CertificateStatus.ISSUED, CertificateStatus.PENDING] },
+          }),
         }),
       );
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
@@ -177,13 +181,23 @@ describe('CertificateService', () => {
   // ── verifyByCode() ────────────────────────────────────────────────────────────
 
   describe('verifyByCode()', () => {
-    it('returns valid=true for ISSUED certificate', async () => {
+    it('returns valid=true, pending=false for ISSUED certificate', async () => {
       mockPrisma.certificate.findUnique.mockResolvedValue(makeCert({ status: CertificateStatus.ISSUED }));
 
       const result = await service.verifyByCode('VERIFY-001');
 
       expect(result.valid).toBe(true);
+      expect(result.pending).toBe(false);
       expect(result.certificate).toBeDefined();
+    });
+
+    it('returns valid=false, pending=true for PENDING certificate', async () => {
+      mockPrisma.certificate.findUnique.mockResolvedValue(makeCert({ status: CertificateStatus.PENDING }));
+
+      const result = await service.verifyByCode('VERIFY-001');
+
+      expect(result.valid).toBe(false);
+      expect(result.pending).toBe(true);
     });
 
     it('returns valid=false for REVOKED certificate', async () => {
@@ -192,6 +206,7 @@ describe('CertificateService', () => {
       const result = await service.verifyByCode('VERIFY-001');
 
       expect(result.valid).toBe(false);
+      expect(result.pending).toBe(false);
       expect(result.certificate).toBeDefined();
     });
 
@@ -235,6 +250,55 @@ describe('CertificateService', () => {
         }),
       );
       expect(result.status).toBe(CertificateStatus.REVOKED);
+    });
+  });
+
+  // ── confirm() ─────────────────────────────────────────────────────────────────
+
+  describe('confirm()', () => {
+    it('throws NotFoundException when certificate not found', async () => {
+      mockPrisma.certificate.findFirst.mockResolvedValue(null);
+
+      await expect(service.confirm('cert-x', 'user-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ForbiddenException when non-owner tries to confirm', async () => {
+      mockPrisma.certificate.findFirst.mockResolvedValue(makeCert({ userId: 'user-1', status: CertificateStatus.PENDING }));
+
+      await expect(service.confirm('cert-1', 'user-2')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws BadRequestException when certificate is already ISSUED', async () => {
+      mockPrisma.certificate.findFirst.mockResolvedValue(makeCert({ userId: 'user-1', status: CertificateStatus.ISSUED }));
+
+      await expect(service.confirm('cert-1', 'user-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when certificate is REVOKED', async () => {
+      mockPrisma.certificate.findFirst.mockResolvedValue(makeCert({ userId: 'user-1', status: CertificateStatus.REVOKED }));
+
+      await expect(service.confirm('cert-1', 'user-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('updates PENDING cert to ISSUED and enqueues CERTIFICATE_ISSUED event', async () => {
+      const pendingCert = makeCert({ status: CertificateStatus.PENDING, userId: 'user-1' });
+      mockPrisma.certificate.findFirst.mockResolvedValue(pendingCert);
+      const issuedCert = { ...pendingCert, status: CertificateStatus.ISSUED };
+      mockPrismaInner.certificate.update.mockResolvedValue(issuedCert);
+
+      const result = await service.confirm('cert-1', 'user-1');
+
+      expect(mockPrismaInner.certificate.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'cert-1' },
+          data: { status: CertificateStatus.ISSUED },
+        }),
+      );
+      expect(mockOutbox.enqueue).toHaveBeenCalledWith(
+        mockPrismaInner,
+        expect.objectContaining({ eventType: EventTypes.CERTIFICATE_ISSUED }),
+      );
+      expect(result.status).toBe(CertificateStatus.ISSUED);
     });
   });
 

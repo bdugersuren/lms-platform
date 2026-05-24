@@ -113,7 +113,9 @@ export class MinioService implements OnModuleInit {
   }
 
   async presign(key: string): Promise<string> {
-    return this.client.presignedGetObject(this.bucket, key, this.presignExpires);
+    const raw = await this.client.presignedGetObject(this.bucket, key, this.presignExpires);
+    // Same rewrite as presignedPutObject: replace internal Docker hostname with nginx proxy URL
+    return raw.replace(this.internalBase, this.publicStoreUrl);
   }
 
   async presignedPutObject(key: string, expiresSeconds?: number): Promise<string> {

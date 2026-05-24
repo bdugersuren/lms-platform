@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCourse } from '@/hooks/use-courses';
@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { useUpdateLesson } from '@/hooks/use-modules';
 import { FileUpload } from '@/components/file-upload';
 import { InteractiveBlocksEditor } from '@/components/interactive-blocks-editor';
+import { MarkdownView } from '@/components/lesson-viewer/markdown-view';
 import type { LessonType } from '@/types/course';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -61,6 +62,10 @@ export default function LessonEditPage() {
   const [initialised, setInitialised] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState(false);
+  const [mdTab, setMdTab] = useState<'edit' | 'preview'>('edit');
+
+  // Track previous contentUrl to detect upload-driven changes
+  const prevContentUrlRef = useRef<string>('');
 
   useEffect(() => {
     if (lesson && !initialised) {
@@ -72,12 +77,64 @@ export default function LessonEditPage() {
       setIsPreview(lesson.isPreview);
       setPassingScore(String(lesson.passingScore));
       setUnlockNextOnPass(lesson.unlockNextOnPass);
-      setContentUrl(lesson.contentUrl ?? '');
+      const initialUrl = lesson.contentUrl ?? '';
+      setContentUrl(initialUrl);
+      prevContentUrlRef.current = initialUrl;
       setRawMarkdown(lesson.rawMarkdown ?? '');
       setRawText(lesson.rawText ?? '');
       setInitialised(true);
     }
   }, [lesson, initialised]);
+
+  // Auto-save when a new file is uploaded (contentUrl changes to a non-empty value)
+  const autoSaveUpload = useCallback(() => {
+    if (
+      !initialised ||
+      !title.trim() ||
+      !contentUrl ||
+      contentUrl === prevContentUrlRef.current ||
+      (lessonType !== 'VIDEO' && lessonType !== 'PDF')
+    ) return;
+    prevContentUrlRef.current = contentUrl;
+    updateLesson.mutate(
+      {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        lessonType,
+        sortOrder: lesson ? Number(sortOrder) : 1,
+        estimatedMinutes: estimatedMinutes !== '' ? Number(estimatedMinutes) : null,
+        isPreview,
+        passingScore: passingScore !== '' ? Number(passingScore) : 0,
+        unlockNextOnPass,
+        contentUrl: contentUrl.trim(),
+        rawMarkdown: rawMarkdown || null,
+        rawText: rawText || null,
+      },
+      {
+        onSuccess: () => { setFormSuccess(true); setInitialised(false); setTimeout(() => setFormSuccess(false), 3000); },
+        onError: (e) => setFormError(e.message),
+      },
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentUrl, initialised, title, lessonType]);
+
+  useEffect(() => { autoSaveUpload(); }, [autoSaveUpload]);
+
+  // Warn before navigating away with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      const dirty =
+        title !== (lesson?.title ?? '') ||
+        description !== (lesson?.description ?? '') ||
+        lessonType !== (lesson?.lessonType ?? 'VIDEO') ||
+        contentUrl !== (lesson?.contentUrl ?? '') ||
+        rawMarkdown !== (lesson?.rawMarkdown ?? '') ||
+        rawText !== (lesson?.rawText ?? '');
+      if (dirty) { e.preventDefault(); }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [title, description, lessonType, contentUrl, rawMarkdown, rawText, lesson]);
 
   if (!isAuthenticated) {
     router.replace('/login');
@@ -374,14 +431,47 @@ export default function LessonEditPage() {
 
             {lessonType === 'MARKDOWN' && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Markdown контент</label>
-                <textarea
-                  value={rawMarkdown}
-                  onChange={(e) => setRawMarkdown(e.target.value)}
-                  rows={20}
-                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono resize-y"
-                  placeholder={'# Гарчиг\n\nКонтентоо энд бичнэ үү...'}
-                />
+                <div className="flex items-center gap-1 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setMdTab('edit')}
+                    className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                      mdTab === 'edit'
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-slate-600 border border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    Засах
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMdTab('preview')}
+                    className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                      mdTab === 'preview'
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-slate-600 border border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    Урьдчилан харах
+                  </button>
+                </div>
+                {mdTab === 'edit' ? (
+                  <textarea
+                    value={rawMarkdown}
+                    onChange={(e) => setRawMarkdown(e.target.value)}
+                    rows={20}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono resize-y"
+                    placeholder={'# Гарчиг\n\nКонтентоо энд бичнэ үү...'}
+                  />
+                ) : (
+                  <div className="rounded-lg border border-slate-200 bg-white p-4 min-h-[480px] overflow-auto">
+                    {rawMarkdown.trim() ? (
+                      <MarkdownView content={rawMarkdown} blocks={[]} />
+                    ) : (
+                      <p className="text-slate-400 text-sm italic">Markdown контент хоосон байна</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

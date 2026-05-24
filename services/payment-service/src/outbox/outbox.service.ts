@@ -49,7 +49,9 @@ export class OutboxService implements OnApplicationBootstrap, OnModuleDestroy {
 
       for (const event of pending) {
         try {
-          await this.messaging.publishEvent(event.eventType, event.payload as object);
+          const stored = event.payload as Record<string, unknown>;
+          const data = (stored?.payload != null ? stored.payload : stored) as object;
+          await this.messaging.publishEvent(event.eventType, data);
           await this.prisma.eventOutbox.update({
             where: { id: event.id },
             data: {
@@ -77,7 +79,9 @@ export class OutboxService implements OnApplicationBootstrap, OnModuleDestroy {
 
   async replayEvent(id: string): Promise<void> {
     const event = await this.prisma.eventOutbox.findUniqueOrThrow({ where: { id } });
-    await this.messaging.publishEvent(event.eventType, event.payload as object);
+    const stored = event.payload as Record<string, unknown>;
+    const data = (stored?.payload != null ? stored.payload : stored) as object;
+    await this.messaging.publishEvent(event.eventType, data);
     await this.prisma.eventOutbox.update({
       where: { id },
       data: { publishedAt: new Date(), attempts: { increment: 1 }, lastError: null },

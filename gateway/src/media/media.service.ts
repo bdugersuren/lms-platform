@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/c
 import * as Minio from 'minio';
 import { randomUUID } from 'crypto';
 import path from 'path';
-import { Readable } from 'stream';
+import type { Readable } from 'stream';
 
 const BUCKET = 'lms-media';
 
@@ -25,16 +25,27 @@ export class MediaService implements OnModuleInit {
   private readonly logger = new Logger(MediaService.name);
   private readonly client: Minio.Client;
   private readonly publicUrl: string;
+  private readonly internalBase: string;
+  private readonly publicStoreUrl: string;
 
   constructor() {
+    const endpoint = process.env.MINIO_ENDPOINT ?? 'minio';
+    const port = parseInt(process.env.MINIO_PORT ?? '9000', 10);
+    const useSSL = process.env.MINIO_USE_SSL === 'true';
+
     this.client = new Minio.Client({
-      endPoint: process.env.MINIO_ENDPOINT ?? 'minio',
-      port: parseInt(process.env.MINIO_PORT ?? '9000', 10),
-      useSSL: process.env.MINIO_USE_SSL === 'true',
+      endPoint: endpoint,
+      port,
+      useSSL,
       accessKey: process.env.MINIO_ACCESS_KEY ?? 'minioadmin',
       secretKey: process.env.MINIO_SECRET_KEY ?? 'minioadmin',
     });
+
     this.publicUrl = process.env.MINIO_PUBLIC_URL ?? 'http://localhost:9000';
+    this.internalBase = `${useSSL ? 'https' : 'http'}://${endpoint}:${port}`;
+    // Presigned GET URLs are rewritten to go through nginx /minio-store/ proxy,
+    // same as presigned PUT URLs. nginx forwards Host: minio:9000 so signature verification passes.
+    this.publicStoreUrl = process.env.MINIO_PUBLIC_STORE_URL ?? 'http://localhost/minio-store';
   }
 
   async onModuleInit() {
@@ -50,18 +61,27 @@ export class MediaService implements OnModuleInit {
   }
 
   async presign(key: string): Promise<string> {
-    return this.client.presignedGetObject(BUCKET, key, 7200); // 2 hours
+    const raw = await this.client.presignedGetObject(BUCKET, key, 7200);
+    // Replace internal Docker hostname with the public nginx proxy URL
+    return raw.replace(this.internalBase, this.publicStoreUrl);
   }
 
   parseKeyFromUrl(rawUrl: string): string {
-    const bucketPrefix = `${this.publicUrl}/${BUCKET}/`;
-    if (rawUrl.startsWith(bucketPrefix)) {
-      return rawUrl.slice(bucketPrefix.length);
-    }
-    // Already a bare key (e.g. "videos/abc.mp4")
-    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
-      return rawUrl;
-    }
+    // Primary: MINIO_PUBLIC_URL (e.g. http://localhost:9000)
+    const publicPrefix = `${this.publicUrl}/${BUCKET}/`;
+    if (rawUrl.startsWith(publicPrefix)) return rawUrl.slice(publicPrefix.length);
+
+    // Fallback: internal Docker URL (e.g. http://minio:9000) — legacy/misconfigured records
+    const internalPrefix = `${this.internalBase}/${BUCKET}/`;
+    if (rawUrl.startsWith(internalPrefix)) return rawUrl.slice(internalPrefix.length);
+
+    // Fallback: nginx proxy URL (e.g. http://localhost/minio-store)
+    const proxyPrefix = `${this.publicStoreUrl}/${BUCKET}/`;
+    if (rawUrl.startsWith(proxyPrefix)) return rawUrl.slice(proxyPrefix.length);
+
+    // Bare key (no protocol prefix)
+    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) return rawUrl;
+
     throw new BadRequestException(`Cannot resolve object key from URL: ${rawUrl}`);
   }
 

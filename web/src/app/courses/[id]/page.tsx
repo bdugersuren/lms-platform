@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -56,6 +57,7 @@ export default function CourseDetailPage() {
   const unenroll = useUnenroll();
 
   const createPayment = useCreatePayment();
+  const qc = useQueryClient();
 
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [actionError, setActionError] = useState('');
@@ -90,7 +92,8 @@ export default function CourseDetailPage() {
       {
         onSuccess: (payment) => {
           if (provider === 'WALLET') {
-            void router.push(`/courses/${id}`);
+            void qc.invalidateQueries({ queryKey: ['enrollments'] });
+            void qc.invalidateQueries({ queryKey: ['wallet'] });
           } else {
             void router.push(`/payments/${payment.id}`);
           }

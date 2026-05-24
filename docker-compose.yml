@@ -288,6 +288,14 @@ services:
     environment:
       <<: *nestjs-env
       PORT: ${GATEWAY_PORT:-3000}
+      # Gateway streams file uploads to MinIO; allow more heap than the shared 150 MB default
+      NODE_OPTIONS: --max-old-space-size=256
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     ports:
       - "3000:3000"
     depends_on:
@@ -484,6 +492,8 @@ services:
       - "127.0.0.1:3008:3008"
     depends_on:
       <<: *infra-depends
+      course-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3008/api/health"]
       <<: *nestjs-healthcheck
@@ -615,6 +625,7 @@ services:
       target: runner
       args:
         NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_DEV_TOOLS: 'true'
     container_name: lms-web
     <<: [*restart, *networks]
     profiles: [frontend]

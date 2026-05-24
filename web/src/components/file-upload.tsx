@@ -2,6 +2,7 @@
 
 import { useRef, useState, DragEvent } from 'react';
 import { useUpload } from '@/hooks/use-upload';
+import { useMediaUrl } from '@/hooks/use-media-url';
 import { clsx } from 'clsx';
 
 type AcceptType = 'video' | 'pdf' | 'image' | 'audio';
@@ -19,6 +20,66 @@ interface FileUploadProps {
   onChange: (url: string) => void;
   label?: string;
   maxMb?: number;
+}
+
+function isYouTubeOrVimeo(url: string): boolean {
+  return /youtube\.com|youtu\.be|vimeo\.com/i.test(url);
+}
+
+function InlinePreview({ accept, rawUrl }: { accept: AcceptType; rawUrl: string }) {
+  const isEmbed = accept === 'video' && isYouTubeOrVimeo(rawUrl);
+  const { mediaUrl, loading } = useMediaUrl(isEmbed ? null : rawUrl);
+
+  if (accept === 'video') {
+    if (isEmbed) {
+      return (
+        <div className="relative w-full rounded-xl overflow-hidden" style={{ paddingTop: '56.25%' }}>
+          <iframe
+            src={rawUrl.replace('watch?v=', 'embed/')}
+            className="absolute inset-0 w-full h-full"
+            allow="autoplay; encrypted-media"
+            allowFullScreen
+            title="Урьдчилан харах"
+          />
+        </div>
+      );
+    }
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-24 rounded-xl border border-slate-200 bg-slate-50">
+          <div className="w-6 h-6 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+    return mediaUrl ? (
+      <video
+        src={mediaUrl}
+        controls
+        controlsList="nodownload disablePictureInPicture"
+        className="w-full max-h-48 rounded-xl border border-slate-200"
+        onContextMenu={(e) => e.preventDefault()}
+      />
+    ) : null;
+  }
+
+  if (accept === 'pdf') {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-48 rounded-xl border border-slate-200 bg-slate-50">
+          <div className="w-6 h-6 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+    return mediaUrl ? (
+      <iframe
+        src={mediaUrl}
+        className="w-full h-48 rounded-xl border border-slate-200"
+        title="PDF урьдчилан харах"
+      />
+    ) : null;
+  }
+
+  return null;
 }
 
 export function FileUpload({ accept, value, onChange, label, maxMb = 500 }: FileUploadProps) {
@@ -135,6 +196,11 @@ export function FileUpload({ accept, value, onChange, label, maxMb = 500 }: File
             &#215;
           </button>
         </div>
+      )}
+
+      {/* Inline preview */}
+      {(accept === 'video' || accept === 'pdf') && value && !uploading && (
+        <InlinePreview accept={accept} rawUrl={value} />
       )}
 
       {/* Manual URL input toggle */}

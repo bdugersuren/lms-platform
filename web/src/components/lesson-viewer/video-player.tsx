@@ -59,7 +59,7 @@ export function VideoPlayer({ url, blocks }: VideoPlayerProps) {
   const isEmbed = source.type === 'youtube' || source.type === 'vimeo';
 
   // Presigned URL — only for native (non-embed) sources
-  const { mediaUrl, loading: mediaLoading } = useMediaUrl(isEmbed ? null : url);
+  const { mediaUrl, loading: mediaLoading, error: mediaError, refresh } = useMediaUrl(isEmbed ? null : url);
 
   const triggerBlocks = blocks
     .filter((b) => b.triggerSecond != null)
@@ -134,11 +134,19 @@ export function VideoPlayer({ url, blocks }: VideoPlayerProps) {
               <div className="flex items-center justify-center h-64 bg-black">
                 <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
               </div>
-            ) : error ? (
+            ) : (error || mediaError) ? (
               <div className="flex flex-col items-center justify-center h-64 text-slate-400">
                 <span className="text-4xl mb-3">⚠️</span>
                 <p className="text-sm">Видео ачаалагдсангүй</p>
-                <p className="text-xs text-slate-500 mt-2">Хуудсыг дахин ачаална уу</p>
+                {mediaError && (
+                  <p className="text-xs text-red-400 mt-1 max-w-xs text-center break-all">{mediaError}</p>
+                )}
+                <button
+                  onClick={() => { setError(false); refresh(); }}
+                  className="mt-3 px-4 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  Дахин оролдох
+                </button>
               </div>
             ) : (
               <video

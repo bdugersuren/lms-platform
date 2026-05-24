@@ -4,7 +4,13 @@ import type { Certificate, CertificateList, VerifyResult, CreateCertificateDto }
 
 interface ApiSuccess<T> { success: boolean; data: T; message?: string; }
 
-export function useCertificates(params?: { search?: string; limit?: number; offset?: number; enabled?: boolean }) {
+export function useCertificates(params?: {
+  search?: string;
+  limit?: number;
+  offset?: number;
+  enabled?: boolean;
+  includeRevoked?: boolean;
+}) {
   return useQuery<CertificateList>({
     queryKey: ['certificates', params],
     queryFn: async () => {
@@ -12,6 +18,7 @@ export function useCertificates(params?: { search?: string; limit?: number; offs
       if (params?.search) q.set('search', params.search);
       if (params?.limit) q.set('limit', String(params.limit));
       if (params?.offset) q.set('offset', String(params.offset));
+      if (params?.includeRevoked) q.set('includeRevoked', 'true');
       const { data } = await api.get<ApiSuccess<CertificateList>>(`/certificates${q.toString() ? `?${q}` : ''}`);
       return data.data;
     },
@@ -47,6 +54,17 @@ export function useIssueCertificate() {
   return useMutation<Certificate, Error, CreateCertificateDto>({
     mutationFn: async (dto) => {
       const { data } = await api.post<ApiSuccess<Certificate>>('/certificates', dto);
+      return data.data;
+    },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['certificates'] }); },
+  });
+}
+
+export function useConfirmCertificate() {
+  const qc = useQueryClient();
+  return useMutation<Certificate, Error, string>({
+    mutationFn: async (id) => {
+      const { data } = await api.patch<ApiSuccess<Certificate>>(`/certificates/${id}/confirm`);
       return data.data;
     },
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ['certificates'] }); },

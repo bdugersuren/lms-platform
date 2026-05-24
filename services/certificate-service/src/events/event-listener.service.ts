@@ -18,12 +18,13 @@ export class EventListenerService {
   async onEnrollmentCompleted(@Payload() event: EnrollmentCompletedPayload): Promise<void> {
     this.logger.log(`Course completed: user=${event.userId} course=${event.courseId}`);
     try {
-      await this.certificates.issue(
+      // Автомат гэрчилгээ нь PENDING болж үүснэ — сурагч хянаж баталгаажуулна
+      await this.certificates.issuePending(
         {
           userId: event.userId,
           courseId: event.courseId,
-          title: 'Certificate of Completion',
-          recipientName: event.recipientName ?? 'Student',
+          title: event.courseTitle ? `Гэрчилгээ: ${event.courseTitle}` : 'Сургалт дүүргэсний гэрчилгээ',
+          recipientName: event.recipientName ?? 'Сурагч',
           description: event.courseTitle ?? undefined,
           completedAt: event.completedAt ?? new Date().toISOString(),
         },

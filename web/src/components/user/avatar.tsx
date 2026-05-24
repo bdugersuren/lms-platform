@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { clsx } from 'clsx';
 
@@ -17,8 +16,6 @@ const sizeClasses = {
   lg: 'w-20 h-20 text-2xl',
 };
 
-const sizePixels = { sm: 28, md: 48, lg: 80 };
-
 export function Avatar({ avatarUrl, displayName, size = 'md', className }: AvatarProps) {
   const [imgError, setImgError] = useState(false);
   const letter = displayName.trim()[0]?.toUpperCase() ?? '?';
@@ -30,11 +27,10 @@ export function Avatar({ avatarUrl, displayName, size = 'md', className }: Avata
   if (avatarUrl && !imgError) {
     return (
       <div className={clsx('relative rounded-full overflow-hidden flex-shrink-0', sizeClasses[size], className)}>
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={avatarUrl}
           alt={displayName}
-          width={sizePixels[size]}
-          height={sizePixels[size]}
           className="object-cover w-full h-full"
           onError={() => setImgError(true)}
         />

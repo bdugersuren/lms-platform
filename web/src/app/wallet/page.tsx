@@ -538,7 +538,7 @@ export default function WalletPage() {
             )}
 
             {/* Dev top-up panel — hidden in production */}
-            {process.env.NODE_ENV !== 'production' && (
+            {process.env.NEXT_PUBLIC_DEV_TOOLS === 'true' && (
               <div className="border border-dashed border-amber-300 bg-amber-50 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">🛠</span>
