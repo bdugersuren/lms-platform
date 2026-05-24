@@ -4,14 +4,13 @@ import {
   IsArray,
   IsOptional,
   IsString,
-  IsUUID,
   ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AnswerItemDto {
   @ApiProperty({ description: 'Question ID' })
-  @IsUUID()
+  @IsString()
   questionId!: string;
 
   @ApiPropertyOptional({ description: 'Free-text answer' })
@@ -22,7 +21,7 @@ export class AnswerItemDto {
   @ApiPropertyOptional({ description: 'Selected option IDs', type: [String] })
   @IsOptional()
   @IsArray()
-  @IsUUID('all', { each: true })
+  @IsString({ each: true })
   selectedOptionIds?: string[];
 }
 

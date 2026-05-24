@@ -90,6 +90,13 @@ services:
     profile: default
     description: Object storage for media files and generated certificates. Console UI on port 9001.
 
+  - name: mc-init
+    kind: infrastructure
+    container: lms-mc-init
+    host_binding: internal
+    profile: default
+    description: One-shot MinIO bootstrap container that creates/configures the LMS media bucket.
+
   # ── Core profile ───────────────────────────────────────────────────────────
   # Minimum backend for a working API. Start before any domain profile.
 
@@ -129,6 +136,16 @@ services:
     database: user_db
     env_var_prefix: USER
     description: "Owns display profiles: displayName, avatar, bio, locale, timezone, onboarding metadata. Bootstrapped automatically from auth.user.registered events. Exposes GET /users/me, PATCH /users/me, GET /users/:id."
+
+  - name: tenant-service
+    kind: backend-service
+    container: lms-tenant-service
+    port: 3016
+    host_binding: "127.0.0.1"
+    profile: core
+    database: tenant_db
+    env_var_prefix: TENANT
+    description: Owns tenants, custom domains, branding, feature flags, memberships, and platform fee policy defaults.
 
   - name: course-service
     kind: backend-service
@@ -262,6 +279,16 @@ services:
     env_var_prefix: ANALYTICS
     description: Owns KPI tracking, reports, AI analytics, and dashboards.
 
+  - name: audit-service
+    kind: backend-service
+    container: lms-audit-service
+    port: 3015
+    host_binding: "127.0.0.1"
+    profile: ops
+    database: audit_db
+    env_var_prefix: AUDIT
+    description: Owns immutable audit logs for compliance, admin operations, and sensitive platform events.
+
   # ── Frontend profile ───────────────────────────────────────────────────────
 
   - name: web
@@ -279,12 +306,12 @@ services:
 
 docker_compose_profiles:
   default:
-    description: Starts infrastructure only — postgres, redis, rabbitmq, minio.
-    services: [postgres, redis, rabbitmq, minio]
+    description: Starts infrastructure only — postgres, redis, rabbitmq, minio, and bucket bootstrap.
+    services: [postgres, redis, rabbitmq, minio, mc-init]
 
   core:
     description: Starts the minimum backend needed for auth, courses, enrollment, and API routing.
-    services: [nginx, gateway, auth-service, course-service, enrollment-service]
+    services: [nginx, gateway, auth-service, user-service, tenant-service, course-service, enrollment-service]
 
   learn:
     description: Starts learning assessment services — quizzes and assignments.
@@ -296,7 +323,7 @@ docker_compose_profiles:
 
   ops:
     description: Starts operational support services — notifications, media, certificates, analytics.
-    services: [notification-service, media-service, certificate-service, analytics-service]
+    services: [notification-service, media-service, certificate-service, analytics-service, audit-service]
 
   frontend:
     description: Starts the Next.js web application. Requires core profile for nginx.

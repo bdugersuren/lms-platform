@@ -204,6 +204,7 @@ export class CourseEventsPublisher {
   ): CourseProjectionPayload {
     return {
       courseId: course.id,
+      tenantId: course.tenantId,
       title: course.title,
       slug: course.slug,
       instructorId: course.instructorId,

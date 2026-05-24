@@ -5,8 +5,7 @@ const DEFAULT_TENANT = process.env.NEXT_PUBLIC_DEFAULT_TENANT_SLUG ?? 'demo';
 
 export function middleware(req: NextRequest) {
   const hostname = req.headers.get('host') ?? 'localhost';
-  const isLocalhost =
-    hostname.startsWith('localhost') || hostname.startsWith('127.0.0.1');
+  const isLocalhost = hostname.startsWith('localhost') || hostname.startsWith('127.0.0.1');
 
   let tenantSlug: string;
 
@@ -22,7 +21,15 @@ export function middleware(req: NextRequest) {
     tenantSlug = `__domain__:${hostname}`;
   }
 
-  const res = NextResponse.next();
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-tenant-slug', tenantSlug);
+  requestHeaders.set('x-tenant-host', hostname);
+
+  const res = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
   res.headers.set('x-tenant-slug', tenantSlug);
   res.headers.set('x-tenant-host', hostname);
   return res;

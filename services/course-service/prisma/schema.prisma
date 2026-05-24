@@ -53,8 +53,9 @@ enum ProgressStatus {
 
 model Course {
   id           String       @id @default(uuid())
+  tenantId     String       @default("demo") @map("tenant_id")
   title        String
-  slug         String       @unique
+  slug         String
   description  String?
   thumbnail    String?
   instructorId String       @map("instructor_id")
@@ -80,6 +81,8 @@ model Course {
   modules     Module[]
   enrollments CourseEnrollment[]
 
+  @@unique([tenantId, slug])
+  @@index([tenantId])
   @@index([instructorId])
   @@index([status])
   @@index([level])

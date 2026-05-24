@@ -9,6 +9,9 @@ CREATE DATABASE auth_db;
 -- User Service
 CREATE DATABASE user_db;
 
+-- Tenant Service
+CREATE DATABASE tenant_db;
+
 -- Course Service
 CREATE DATABASE course_db;
 
@@ -48,6 +51,7 @@ CREATE DATABASE audit_db;
 -- Grant the lms user full access to all databases
 GRANT ALL PRIVILEGES ON DATABASE auth_db TO lms;
 GRANT ALL PRIVILEGES ON DATABASE user_db TO lms;
+GRANT ALL PRIVILEGES ON DATABASE tenant_db TO lms;
 GRANT ALL PRIVILEGES ON DATABASE course_db TO lms;
 GRANT ALL PRIVILEGES ON DATABASE enrollment_db TO lms;
 GRANT ALL PRIVILEGES ON DATABASE quiz_db TO lms;

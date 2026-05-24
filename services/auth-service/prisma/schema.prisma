@@ -20,6 +20,7 @@ enum UserRole {
 
 model User {
   id           String   @id @default(uuid())
+  tenantId     String   @default("demo") @map("tenant_id")
   email        String   @unique
   passwordHash String   @map("password_hash")
   role         UserRole @default(STUDENT)
@@ -33,6 +34,7 @@ model User {
   oauthAccounts OAuthAccount[]
 
   @@index([email])
+  @@index([tenantId])
   @@map("users")
 }
 

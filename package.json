@@ -40,6 +40,7 @@
     "dev:gateway": "pnpm --filter @lms/gateway start:dev",
     "dev:auth": "pnpm --filter @lms/auth-service start:dev",
     "dev:user": "pnpm --filter @lms/user-service start:dev",
+    "dev:tenant": "pnpm --filter @lms/tenant-service start:dev",
     "dev:course": "pnpm --filter @lms/course-service start:dev",
     "dev:enrollment": "pnpm --filter @lms/enrollment-service start:dev",
     "dev:quiz": "pnpm --filter @lms/quiz-service start:dev",

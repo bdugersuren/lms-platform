@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -15,7 +16,14 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtPayload } from '@lms/shared-types';
@@ -36,8 +44,12 @@ export class MediaController {
 
   @Post('presign-upload')
   @ApiOperation({ summary: 'Request a presigned PUT URL for direct browser-to-MinIO upload' })
-  async presignUpload(@CurrentUser() user: JwtPayload, @Body() dto: PresignUploadDto) {
-    const data = await this.mediaService.createPresignedUpload(user.sub, dto);
+  async presignUpload(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: PresignUploadDto,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const data = await this.mediaService.createPresignedUpload(user.sub, dto, tenantId);
     return ApiResponseBuilder.success(data, 'Presigned upload URL generated');
   }
 
@@ -46,32 +58,49 @@ export class MediaController {
   async finalizeUpload(
     @CurrentUser() user: JwtPayload,
     @Param('key') key: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.mediaService.finalizeUpload(user.sub, key);
+    const data = await this.mediaService.finalizeUpload(user.sub, key, tenantId);
     return ApiResponseBuilder.success(data, 'Upload finalized');
   }
 
   @Post('files')
   @ApiOperation({ summary: 'Upload a file to MinIO and register metadata' })
   @ApiConsumes('multipart/form-data')
-  @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_FILE_SIZE } }))
-  async upload(@CurrentUser() user: JwtPayload, @UploadedFile() file: Express.Multer.File) {
-    const data = await this.mediaService.upload(user.sub, file);
+  @ApiBody({
+    schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_FILE_SIZE } }),
+  )
+  async upload(
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile() file: Express.Multer.File,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const data = await this.mediaService.upload(user.sub, file, tenantId);
     return ApiResponseBuilder.success(data, 'File uploaded successfully');
   }
 
   @Get('files')
   @ApiOperation({ summary: 'List my media files' })
-  async findAll(@CurrentUser() user: JwtPayload, @Query() query: QueryMediaDto) {
-    const data = await this.mediaService.findAll(user.sub, query);
+  async findAll(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: QueryMediaDto,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const data = await this.mediaService.findAll(user.sub, query, tenantId);
     return ApiResponseBuilder.success(data);
   }
 
   @Get('files/:id')
   @ApiOperation({ summary: 'Get media file details' })
-  async findOne(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
-    const data = await this.mediaService.findOne(user.sub, id);
+  async findOne(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const data = await this.mediaService.findOne(user.sub, id, tenantId);
     return ApiResponseBuilder.success(data);
   }
 
@@ -81,16 +110,21 @@ export class MediaController {
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateMediaDto,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.mediaService.update(user.sub, id, dto);
+    const data = await this.mediaService.update(user.sub, id, dto, tenantId);
     return ApiResponseBuilder.success(data, 'Updated');
   }
 
   @Delete('files/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a media file from MinIO and DB' })
-  async remove(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.mediaService.remove(user.sub, id);
+  async remove(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ): Promise<void> {
+    await this.mediaService.remove(user.sub, id, tenantId);
   }
 
   @Get('presign')

@@ -1,14 +1,15 @@
 export interface WalletRevenueDistributedPayload {
+  tenantId?: string;
   instructorId: string;
   courseId: string;
   enrollmentId: string;
-  grossAmount: number;
-  platformFee: number;
-  netAmount: number;
+  grossAmount: string;
+  platformFee: string;
+  netAmount: string;
 }
 
 export interface WalletPayoutRequestedPayload {
   ownerId: string;
   payoutId: string;
-  amount: number;
+  amount: string;
 }

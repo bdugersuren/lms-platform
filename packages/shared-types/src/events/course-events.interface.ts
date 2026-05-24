@@ -33,6 +33,7 @@ export interface EventEnvelope<TPayload> {
 
 export interface CourseProjectionPayload {
   courseId: string;
+  tenantId: string;
   title: string;
   slug: string;
   instructorId: string;

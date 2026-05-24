@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CourseStatus, Prisma } from '@prisma/client';
 import slugify from 'slugify';
 import { ApiResponseBuilder, buildPaginationMeta } from '@lms/shared-utils';
@@ -23,11 +19,12 @@ export class CourseService {
     private readonly courseEvents: CourseEventsPublisher,
   ) {}
 
-  async create(dto: CreateCourseDto, user: JwtPayload) {
-    const slug = await this.generateUniqueSlug(dto.title);
+  async create(dto: CreateCourseDto, user: JwtPayload, tenantId = 'demo') {
+    const slug = await this.generateUniqueSlug(dto.title, tenantId);
 
     const course = await this.prisma.course.create({
       data: {
+        tenantId,
         title: dto.title,
         slug,
         description: dto.description,
@@ -44,6 +41,7 @@ export class CourseService {
 
     void this.messaging.publishEvent(CourseEventPatterns.CREATED, {
       courseId: course.id,
+      tenantId: course.tenantId,
       title: course.title,
       slug: course.slug,
       instructorId: course.instructorId,
@@ -52,10 +50,10 @@ export class CourseService {
     return ApiResponseBuilder.success(course, 'Course created successfully');
   }
 
-  async findAll(query: CourseQueryDto) {
+  async findAll(query: CourseQueryDto, tenantId = 'demo') {
     const { page = 1, limit = 20, status, level, instructorId, search } = query;
 
-    const where: Prisma.CourseWhereInput = {};
+    const where: Prisma.CourseWhereInput = { tenantId };
     if (status) where.status = status;
     if (level) where.level = level;
     if (instructorId) where.instructorId = instructorId;
@@ -101,9 +99,9 @@ export class CourseService {
     );
   }
 
-  async findOne(id: string) {
-    const course = await this.prisma.course.findUnique({
-      where: { id },
+  async findOne(id: string, tenantId = 'demo') {
+    const course = await this.prisma.course.findFirst({
+      where: { id, tenantId },
       include: {
         modules: {
           orderBy: { sortOrder: 'asc' },
@@ -132,9 +130,9 @@ export class CourseService {
     return ApiResponseBuilder.success(course, 'Course retrieved');
   }
 
-  async findBySlug(slug: string) {
-    const course = await this.prisma.course.findUnique({
-      where: { slug },
+  async findBySlug(slug: string, tenantId = 'demo') {
+    const course = await this.prisma.course.findFirst({
+      where: { slug, tenantId },
       include: {
         modules: {
           orderBy: { sortOrder: 'asc' },
@@ -163,8 +161,8 @@ export class CourseService {
     return ApiResponseBuilder.success(course, 'Course retrieved');
   }
 
-  async update(id: string, dto: UpdateCourseDto, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id } });
+  async update(id: string, dto: UpdateCourseDto, user: JwtPayload, tenantId = 'demo') {
+    const course = await this.prisma.course.findFirst({ where: { id, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
 
     this.assertOwnerOrAdmin(course.instructorId, user);
@@ -172,7 +170,7 @@ export class CourseService {
     const data: Prisma.CourseUpdateInput = {};
     if (dto.title !== undefined) {
       data.title = dto.title;
-      data.slug = await this.generateUniqueSlug(dto.title, id);
+      data.slug = await this.generateUniqueSlug(dto.title, tenantId, id);
     }
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.thumbnail !== undefined) data.thumbnail = dto.thumbnail;
@@ -196,12 +194,7 @@ export class CourseService {
         where: { id },
         data: { ...data, contentVersion: { increment: 1 } },
       });
-      await this.courseEvents.enqueueCourseUpdated(
-        tx,
-        id,
-        result.contentVersion,
-        changedFields,
-      );
+      await this.courseEvents.enqueueCourseUpdated(tx, id, result.contentVersion, changedFields);
       return result;
     });
 
@@ -210,8 +203,8 @@ export class CourseService {
     return ApiResponseBuilder.success(updated, 'Course updated');
   }
 
-  async publish(id: string, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id } });
+  async publish(id: string, user: JwtPayload, tenantId = 'demo') {
+    const course = await this.prisma.course.findFirst({ where: { id, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
 
     this.assertOwnerOrAdmin(course.instructorId, user);
@@ -233,6 +226,7 @@ export class CourseService {
 
     void this.messaging.publishEvent(CourseEventPatterns.PUBLISHED, {
       courseId: course.id,
+      tenantId: course.tenantId,
       title: course.title,
       instructorId: course.instructorId,
     });
@@ -240,8 +234,8 @@ export class CourseService {
     return ApiResponseBuilder.success(updated, 'Course published');
   }
 
-  async archive(id: string, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id } });
+  async archive(id: string, user: JwtPayload, tenantId = 'demo') {
+    const course = await this.prisma.course.findFirst({ where: { id, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
 
     this.assertOwnerOrAdmin(course.instructorId, user);
@@ -254,9 +248,7 @@ export class CourseService {
           contentVersion: { increment: 1 },
         },
       });
-      await this.courseEvents.enqueueCourseUpdated(tx, id, result.contentVersion, [
-        'status',
-      ]);
+      await this.courseEvents.enqueueCourseUpdated(tx, id, result.contentVersion, ['status']);
       return result;
     });
 
@@ -264,14 +256,15 @@ export class CourseService {
 
     void this.messaging.publishEvent(CourseEventPatterns.ARCHIVED, {
       courseId: course.id,
+      tenantId: course.tenantId,
       instructorId: course.instructorId,
     });
 
     return ApiResponseBuilder.success(updated, 'Course archived');
   }
 
-  async remove(id: string, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id } });
+  async remove(id: string, user: JwtPayload, tenantId = 'demo') {
+    const course = await this.prisma.course.findFirst({ where: { id, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
 
     this.assertOwnerOrAdmin(course.instructorId, user);
@@ -281,13 +274,17 @@ export class CourseService {
     return ApiResponseBuilder.success(null, 'Course deleted');
   }
 
-  private async generateUniqueSlug(title: string, excludeId?: string): Promise<string> {
+  private async generateUniqueSlug(
+    title: string,
+    tenantId = 'demo',
+    excludeId?: string,
+  ): Promise<string> {
     const base = slugify(title, { lower: true, strict: true });
     let slug = base;
     let attempt = 0;
 
     while (true) {
-      const existing = await this.prisma.course.findUnique({ where: { slug } });
+      const existing = await this.prisma.course.findFirst({ where: { slug, tenantId } });
       if (!existing || existing.id === excludeId) return slug;
       attempt++;
       slug = `${base}-${attempt}`;

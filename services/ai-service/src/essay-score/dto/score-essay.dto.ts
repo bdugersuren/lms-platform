@@ -10,7 +10,7 @@ export class ScoreEssayDto {
 
   @ApiPropertyOptional({ description: 'Assignment ID this essay belongs to' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   assignmentId?: string;
 
   @ApiPropertyOptional({ description: 'Assignment prompt / topic for context' })
@@ -28,6 +28,6 @@ export class ScoreEssayDto {
 
   @ApiPropertyOptional({ description: 'Custom rubric ID (teacher-configured)' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   rubricId?: string;
 }

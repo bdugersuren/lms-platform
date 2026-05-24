@@ -6,7 +6,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   Max,
   Min,
 } from 'class-validator';
@@ -20,12 +19,12 @@ enum AssignmentType {
 
 export class CreateAssignmentDto {
   @ApiProperty()
-  @IsUUID()
+  @IsString()
   courseId!: string;
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUUID()
+  @IsString()
   lessonId?: string;
 
   @ApiProperty()

@@ -23,6 +23,7 @@ export class CourseProjectionService {
       where: { courseId: course.courseId },
       create: {
         courseId: course.courseId,
+        tenantId: course.tenantId ?? 'demo',
         title: course.title,
         instructorId: course.instructorId,
         price: new Prisma.Decimal(course.price ?? '0'),
@@ -31,6 +32,7 @@ export class CourseProjectionService {
         publishedAt: course.publishedAt ? new Date(course.publishedAt) : null,
       },
       update: {
+        tenantId: course.tenantId ?? 'demo',
         title: course.title,
         instructorId: course.instructorId,
         price: new Prisma.Decimal(course.price ?? '0'),

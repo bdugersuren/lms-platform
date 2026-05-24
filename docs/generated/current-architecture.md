@@ -26,10 +26,12 @@ Generated from:
 | redis | infrastructure | default | 6379 | 127.0.0.1:6379:6379 | - | Shared cache, rate limiting, and session store. |
 | rabbitmq | infrastructure | default | 5672 | 127.0.0.1:5672:5672, 127.0.0.1:15672:15672 | - | Message broker for async inter-service communication. Management UI on port 15672. |
 | minio | infrastructure | default | 9000 | 127.0.0.1:9000:9000, 127.0.0.1:9001:9001 | - | Object storage for media files and generated certificates. Console UI on port 9001. |
+| mc-init | infrastructure | default | - | - | - | One-shot MinIO bootstrap container that creates/configures the LMS media bucket. |
 | nginx | infrastructure | core | 80 | 80:80 | - | Reverse proxy. Routes public HTTP traffic to gateway. |
 | gateway | api-gateway | core | 3000 | 3000:3000 | - | Routes client API requests to backend services. Handles JWT validation, rate limiting, and CORS. |
 | auth-service | backend-service | core | 3001 | 127.0.0.1:3001:3001 | auth_db | Handles login, registration, JWT tokens, MFA, and OAuth. |
 | user-service | backend-service | core | 3014 | 127.0.0.1:3014:3014 | user_db | Owns display profiles: displayName, avatar, bio, locale, timezone, onboarding metadata. Bootstrapped automatically from auth.user.registered events. Exposes GET /users/me, PATCH /users/me, GET /users/:id. |
+| tenant-service | backend-service | core | 3016 | 127.0.0.1:3016:3016 | tenant_db | Owns tenants, custom domains, branding, feature flags, memberships, and platform fee policy defaults. |
 | course-service | backend-service | core | 3003 | 127.0.0.1:3003:3003 | course_db | Owns courses, modules, lessons, skills, curriculum, and prerequisites. |
 | enrollment-service | backend-service | core | 3004 | 127.0.0.1:3004:3004 | enrollment_db | Owns enrollments, lesson progress, and course completion state. Calls course-service via REST. |
 | quiz-service | backend-service | learn | 3005 | 127.0.0.1:3005:3005 | quiz_db | Owns quizzes, adaptive exams, question bank, attempts, and grading. |
@@ -40,6 +42,7 @@ Generated from:
 | media-service | backend-service | ops | 3011 | 127.0.0.1:3011:3011 | media_db | Owns video uploads, transcoding, subtitles, and media management. Uses MinIO for storage. |
 | certificate-service | backend-service | ops | 3012 | 127.0.0.1:3012:3012 | certificate_db | Owns certificate generation, QR verification, and public validation. Uses MinIO for storage. |
 | analytics-service | backend-service | ops | 3013 | 127.0.0.1:3013:3013 | analytics_db | Owns KPI tracking, reports, AI analytics, and dashboards. |
+| audit-service | backend-service | ops | 3015 | 127.0.0.1:3015:3015 | audit_db | Owns immutable audit logs for compliance, admin operations, and sensitive platform events. |
 | web | frontend | frontend | 3002 | - | - | Next.js student, instructor, and admin user interface. Served through nginx. |
 | ollama | infrastructure | ai | 11434 | 127.0.0.1:11434:11434 | - | Local LLM inference engine. All AI inference must route through Ollama — never external APIs. |
 | ai-service | backend-service | ai | 3009 | 127.0.0.1:3009:3009 | ai_db | Owns AI tutor sessions, essay scoring, recommendations, and adaptive learning. |
@@ -58,6 +61,7 @@ Generated from:
 | gateway | 3000:3000 |
 | auth-service | 127.0.0.1:3001:3001 |
 | user-service | 127.0.0.1:3014:3014 |
+| tenant-service | 127.0.0.1:3016:3016 |
 | course-service | 127.0.0.1:3003:3003 |
 | enrollment-service | 127.0.0.1:3004:3004 |
 | quiz-service | 127.0.0.1:3005:3005 |
@@ -68,6 +72,7 @@ Generated from:
 | media-service | 127.0.0.1:3011:3011 |
 | certificate-service | 127.0.0.1:3012:3012 |
 | analytics-service | 127.0.0.1:3013:3013 |
+| audit-service | 127.0.0.1:3015:3015 |
 | ollama | 127.0.0.1:11434:11434 |
 | ai-service | 127.0.0.1:3009:3009 |
 
@@ -75,11 +80,11 @@ Generated from:
 
 | Profile | Description | Services |
 | --- | --- | --- |
-| default | Starts infrastructure only — postgres, redis, rabbitmq, minio. | postgres, redis, rabbitmq, minio |
-| core | Starts the minimum backend needed for auth, courses, enrollment, and API routing. | nginx, gateway, auth-service, user-service, course-service, enrollment-service |
+| default | Starts infrastructure only — postgres, redis, rabbitmq, minio, and bucket bootstrap. | postgres, redis, rabbitmq, minio, mc-init |
+| core | Starts the minimum backend needed for auth, courses, enrollment, and API routing. | nginx, gateway, auth-service, user-service, tenant-service, course-service, enrollment-service |
 | learn | Starts learning assessment services — quizzes and assignments. | quiz-service, assignment-service |
 | finance | Starts payment and wallet services. Financial logic is isolated. | wallet-service, payment-service |
-| ops | Starts operational support services — notifications, media, certificates, analytics. | notification-service, media-service, certificate-service, analytics-service |
+| ops | Starts operational support services — notifications, media, certificates, analytics. | notification-service, media-service, certificate-service, analytics-service, audit-service |
 | frontend | Starts the Next.js web application. Requires core profile for nginx. | web |
 | ai | Starts local AI inference and the AI service. Requires core profile. | ollama, ai-service |
 
@@ -87,6 +92,7 @@ Generated from:
 
 | Service | Depends On | Condition |
 | --- | --- | --- |
+| mc-init | minio | service_healthy |
 | nginx | gateway | service_healthy |
 | gateway | redis | service_healthy |
 | gateway | rabbitmq | service_healthy |
@@ -96,6 +102,9 @@ Generated from:
 | user-service | postgres | service_healthy |
 | user-service | redis | service_healthy |
 | user-service | rabbitmq | service_healthy |
+| tenant-service | postgres | service_healthy |
+| tenant-service | redis | service_healthy |
+| tenant-service | rabbitmq | service_healthy |
 | course-service | postgres | service_healthy |
 | course-service | redis | service_healthy |
 | course-service | rabbitmq | service_healthy |
@@ -129,6 +138,9 @@ Generated from:
 | analytics-service | postgres | service_healthy |
 | analytics-service | redis | service_healthy |
 | analytics-service | rabbitmq | service_healthy |
+| audit-service | postgres | service_healthy |
+| audit-service | redis | service_healthy |
+| audit-service | rabbitmq | service_healthy |
 | web | gateway | service_healthy |
 | ai-service | postgres | service_healthy |
 | ai-service | redis | service_healthy |
@@ -141,10 +153,12 @@ Generated from:
 - **redis** (default) -> ports: 127.0.0.1:6379:6379; depends on: no compose dependencies
 - **rabbitmq** (default) -> ports: 127.0.0.1:5672:5672, 127.0.0.1:15672:15672; depends on: no compose dependencies
 - **minio** (default) -> ports: 127.0.0.1:9000:9000, 127.0.0.1:9001:9001; depends on: no compose dependencies
+- **mc-init** (default) -> ports: internal only; depends on: minio
 - **nginx** (core) -> ports: 80:80; depends on: gateway
 - **gateway** (core) -> ports: 3000:3000; depends on: redis, rabbitmq
 - **auth-service** (core) -> ports: 127.0.0.1:3001:3001; depends on: postgres, redis, rabbitmq
 - **user-service** (core) -> ports: 127.0.0.1:3014:3014; depends on: postgres, redis, rabbitmq
+- **tenant-service** (core) -> ports: 127.0.0.1:3016:3016; depends on: postgres, redis, rabbitmq
 - **course-service** (core) -> ports: 127.0.0.1:3003:3003; depends on: postgres, redis, rabbitmq
 - **enrollment-service** (core) -> ports: 127.0.0.1:3004:3004; depends on: postgres, redis, rabbitmq, course-service
 - **quiz-service** (learn) -> ports: 127.0.0.1:3005:3005; depends on: postgres, redis, rabbitmq
@@ -155,6 +169,7 @@ Generated from:
 - **media-service** (ops) -> ports: 127.0.0.1:3011:3011; depends on: postgres, redis, rabbitmq, minio
 - **certificate-service** (ops) -> ports: 127.0.0.1:3012:3012; depends on: postgres, redis, rabbitmq, minio
 - **analytics-service** (ops) -> ports: 127.0.0.1:3013:3013; depends on: postgres, redis, rabbitmq
+- **audit-service** (ops) -> ports: 127.0.0.1:3015:3015; depends on: postgres, redis, rabbitmq
 - **web** (frontend) -> ports: internal only; depends on: gateway
 - **ollama** (ai) -> ports: 127.0.0.1:11434:11434; depends on: no compose dependencies
 - **ai-service** (ai) -> ports: 127.0.0.1:3009:3009; depends on: postgres, redis, rabbitmq, ollama
@@ -166,10 +181,12 @@ Generated from:
 | postgres | - | POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_HOST_AUTH_METHOD |
 | rabbitmq | - | RABBITMQ_DEFAULT_USER, RABBITMQ_DEFAULT_PASS, RABBITMQ_DEFAULT_VHOST, RABBITMQ_ERLANG_COOKIE |
 | minio | - | MINIO_ROOT_USER, MINIO_ROOT_PASSWORD |
+| mc-init | - | MINIO_ROOT_USER, MINIO_ROOT_PASSWORD, MINIO_BUCKET |
 | gateway | .env | NODE_OPTIONS, NODE_ENV, PORT |
 | auth-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL |
 | user-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL |
-| course-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL |
+| tenant-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL |
+| course-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL, ENROLLMENT_CUTOVER_ENABLED |
 | enrollment-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL, COURSE_SERVICE_URL |
 | quiz-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL |
 | assignment-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL |
@@ -179,6 +196,7 @@ Generated from:
 | media-service | .env | NODE_OPTIONS, NODE_ENV, MINIO_ENDPOINT, MINIO_PORT, MINIO_USE_SSL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_PUBLIC_URL, PORT, DATABASE_URL, MINIO_BUCKET, UPLOAD_MAX_SIZE_MB, PRESIGN_EXPIRES_SECONDS |
 | certificate-service | .env | NODE_OPTIONS, NODE_ENV, MINIO_ENDPOINT, MINIO_PORT, MINIO_USE_SSL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, MINIO_PUBLIC_URL, PORT, DATABASE_URL, MINIO_BUCKET, APP_PUBLIC_URL |
 | analytics-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL |
+| audit-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL |
 | web | - | NODE_ENV, PORT, HOSTNAME |
 | ai-service | .env | NODE_OPTIONS, NODE_ENV, PORT, DATABASE_URL, OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_TIMEOUT_MS |
 

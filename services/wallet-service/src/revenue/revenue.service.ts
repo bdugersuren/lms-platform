@@ -5,8 +5,7 @@ import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { OutboxService } from '../outbox/outbox.service';
-
-const PLATFORM_FEE_PERCENT = new Decimal('20'); // 20% platform fee
+import { FeePolicyService } from '../fee-policy/fee-policy.service';
 
 @Injectable()
 export class RevenueService {
@@ -14,6 +13,7 @@ export class RevenueService {
     private readonly prisma: PrismaService,
     private readonly walletService: WalletService,
     private readonly outbox: OutboxService,
+    private readonly feePolicy: FeePolicyService,
   ) {}
 
   /**
@@ -24,13 +24,15 @@ export class RevenueService {
     instructorId: string,
     courseId: string,
     enrollmentId: string,
-    grossAmount: number,
+    grossAmount: string | number,
+    tenantId = 'demo',
   ) {
     const gross = new Decimal(grossAmount);
-    const platformFee = gross.times(PLATFORM_FEE_PERCENT).dividedBy(100).toDecimalPlaces(2);
+    const feePercent = await this.feePolicy.getRevenueShareFeePercent(tenantId);
+    const platformFee = gross.times(feePercent).dividedBy(100).toDecimalPlaces(2);
     const netAmount = gross.minus(platformFee);
 
-    const wallet = await this.walletService.getOrCreate(instructorId, 'USER');
+    const wallet = await this.walletService.getOrCreate(instructorId, 'USER', tenantId);
 
     return this.prisma.$transaction(async (tx) => {
       const balanceBefore = wallet.balance;
@@ -57,12 +59,13 @@ export class RevenueService {
       const share = await tx.revenueShare.create({
         data: {
           walletId: wallet.id,
+          tenantId,
           courseId,
           enrollmentId,
           grossAmount: gross,
           platformFee,
           netAmount,
-          feePercent: PLATFORM_FEE_PERCENT,
+          feePercent,
         },
       });
 
@@ -77,11 +80,12 @@ export class RevenueService {
         sequence: 1,
         payload: {
           instructorId,
+          tenantId,
           courseId,
           enrollmentId,
-          grossAmount,
-          platformFee: platformFee.toNumber(),
-          netAmount: netAmount.toNumber(),
+          grossAmount: gross.toString(),
+          platformFee: platformFee.toString(),
+          netAmount: netAmount.toString(),
         },
       });
 
@@ -89,35 +93,36 @@ export class RevenueService {
     });
   }
 
-  async listByOwner(ownerId: string, page = 1, limit = 20) {
-    const wallet = await this.walletService.findByOwner(ownerId);
+  async listByOwner(ownerId: string, page = 1, limit = 20, tenantId = 'demo') {
+    const wallet = await this.walletService.findByOwner(ownerId, tenantId);
 
     const [items, total] = await Promise.all([
       this.prisma.revenueShare.findMany({
-        where: { walletId: wallet.id },
+        where: { walletId: wallet.id, tenantId },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.revenueShare.count({ where: { walletId: wallet.id } }),
+      this.prisma.revenueShare.count({ where: { walletId: wallet.id, tenantId } }),
     ]);
 
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async summary(ownerId: string) {
-    const wallet = await this.walletService.findByOwner(ownerId);
+  async summary(ownerId: string, tenantId = 'demo') {
+    const wallet = await this.walletService.findByOwner(ownerId, tenantId);
 
     const agg = await this.prisma.revenueShare.aggregate({
-      where: { walletId: wallet.id },
+      where: { walletId: wallet.id, tenantId },
       _sum: { grossAmount: true, platformFee: true, netAmount: true },
       _count: true,
     });
 
     return {
-      totalGross: agg._sum.grossAmount ?? 0,
-      totalPlatformFee: agg._sum.platformFee ?? 0,
-      totalNet: agg._sum.netAmount ?? 0,
+      totalGross: (agg._sum.grossAmount ?? new Decimal(0)).toString(),
+      totalPlatformFee: (agg._sum.platformFee ?? new Decimal(0)).toString(),
+      totalNet: (agg._sum.netAmount ?? new Decimal(0)).toString(),
+      feePercent: (await this.feePolicy.getRevenueShareFeePercent(tenantId)).toString(),
       enrollmentCount: agg._count,
     };
   }

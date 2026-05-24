@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -9,13 +10,7 @@ import {
   Patch,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiParam,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtPayload } from '@lms/shared-types';
 import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
@@ -34,8 +29,8 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'Profile returned' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Profile not yet created' })
-  async getMe(@CurrentUser() user: JwtPayload) {
-    const profile = await this.userService.findMe(user.sub);
+  async getMe(@CurrentUser() user: JwtPayload, @Headers('x-tenant-id') tenantId = 'demo') {
+    const profile = await this.userService.findMe(user.sub, tenantId);
     return ApiResponseBuilder.success(profile, 'Profile retrieved');
   }
 
@@ -51,8 +46,9 @@ export class UserController {
   async updateMe(
     @CurrentUser() user: JwtPayload,
     @Body() dto: UpdateProfileDto,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const profile = await this.userService.updateMe(user.sub, user.email, dto);
+    const profile = await this.userService.updateMe(user.sub, user.email, dto, tenantId);
     return ApiResponseBuilder.success(profile, 'Profile updated');
   }
 
@@ -61,8 +57,11 @@ export class UserController {
   @ApiParam({ name: 'id', description: 'User UUID (same as auth-service user ID)' })
   @ApiResponse({ status: 200, description: 'Public profile returned' })
   @ApiResponse({ status: 404, description: 'Profile not found' })
-  async getPublic(@Param('id', ParseUUIDPipe) id: string) {
-    const profile = await this.userService.findPublic(id);
+  async getPublic(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const profile = await this.userService.findPublic(id, tenantId);
     return ApiResponseBuilder.success(profile, 'Profile retrieved');
   }
 }

@@ -44,6 +44,7 @@ enum TranscodeFormat {
 
 model MediaFile {
   id           String      @id @default(uuid())
+  tenantId     String      @default("demo") @map("tenant_id")
   userId       String      @map("user_id")
   key          String      @unique
   url          String
@@ -65,6 +66,7 @@ model MediaFile {
   transcodeJobs TranscodeJob[]
   subtitles     Subtitle[]
 
+  @@index([tenantId])
   @@index([userId])
   @@index([mediaType])
   @@map("media_files")

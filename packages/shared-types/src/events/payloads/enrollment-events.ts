@@ -1,11 +1,13 @@
 export interface EnrollmentCreatedPayload {
   enrollmentId: string;
+  tenantId?: string;
   courseId: string;
   studentId: string;
 }
 
 export interface EnrollmentCompletedPayload {
   enrollmentId: string;
+  tenantId?: string;
   courseId: string;
   userId: string;
   studentId: string;
@@ -16,6 +18,7 @@ export interface EnrollmentCompletedPayload {
 
 export interface LessonCompletedPayload {
   enrollmentId: string;
+  tenantId?: string;
   courseId: string;
   lessonId: string;
   studentId: string;

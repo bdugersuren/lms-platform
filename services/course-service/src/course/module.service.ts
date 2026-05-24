@@ -15,8 +15,8 @@ export class ModuleService {
     private readonly courseEvents: CourseEventsPublisher,
   ) {}
 
-  async create(courseId: string, dto: CreateModuleDto, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+  async create(courseId: string, dto: CreateModuleDto, user: JwtPayload, tenantId = 'demo') {
+    const course = await this.prisma.course.findFirst({ where: { id: courseId, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
     this.assertOwnerOrAdmin(course.instructorId, user);
 
@@ -31,9 +31,7 @@ export class ModuleService {
         },
       });
       const contentVersion = await this.courseEvents.bumpContentVersion(tx, courseId);
-      await this.courseEvents.enqueueCourseUpdated(tx, courseId, contentVersion, [
-        'modules',
-      ]);
+      await this.courseEvents.enqueueCourseUpdated(tx, courseId, contentVersion, ['modules']);
       return created;
     });
 
@@ -42,7 +40,13 @@ export class ModuleService {
     return ApiResponseBuilder.success(module, 'Module created');
   }
 
-  async findByCourse(courseId: string) {
+  async findByCourse(courseId: string, tenantId = 'demo') {
+    const course = await this.prisma.course.findFirst({
+      where: { id: courseId, tenantId },
+      select: { id: true },
+    });
+    if (!course) throw new NotFoundException('Course not found');
+
     const modules = await this.prisma.module.findMany({
       where: { courseId },
       orderBy: { sortOrder: 'asc' },
@@ -56,8 +60,14 @@ export class ModuleService {
     return ApiResponseBuilder.success(modules, 'Modules retrieved');
   }
 
-  async update(courseId: string, moduleId: string, dto: Partial<CreateModuleDto>, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+  async update(
+    courseId: string,
+    moduleId: string,
+    dto: Partial<CreateModuleDto>,
+    user: JwtPayload,
+    tenantId = 'demo',
+  ) {
+    const course = await this.prisma.course.findFirst({ where: { id: courseId, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
     this.assertOwnerOrAdmin(course.instructorId, user);
 
@@ -70,15 +80,12 @@ export class ModuleService {
     if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder;
     if (dto.unlockScore !== undefined) data.unlockScore = dto.unlockScore;
 
-    const sortOrderChanged =
-      dto.sortOrder !== undefined && dto.sortOrder !== existing.sortOrder;
+    const sortOrderChanged = dto.sortOrder !== undefined && dto.sortOrder !== existing.sortOrder;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.module.update({ where: { id: moduleId }, data });
       const contentVersion = await this.courseEvents.bumpContentVersion(tx, courseId);
-      await this.courseEvents.enqueueCourseUpdated(tx, courseId, contentVersion, [
-        'modules',
-      ]);
+      await this.courseEvents.enqueueCourseUpdated(tx, courseId, contentVersion, ['modules']);
       if (sortOrderChanged) {
         await this.courseEvents.enqueueLessonReordered(tx, courseId, contentVersion);
       }
@@ -90,8 +97,8 @@ export class ModuleService {
     return ApiResponseBuilder.success(updated, 'Module updated');
   }
 
-  async remove(courseId: string, moduleId: string, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+  async remove(courseId: string, moduleId: string, user: JwtPayload, tenantId = 'demo') {
+    const course = await this.prisma.course.findFirst({ where: { id: courseId, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
     this.assertOwnerOrAdmin(course.instructorId, user);
 
@@ -118,9 +125,7 @@ export class ModuleService {
         );
       }
 
-      await this.courseEvents.enqueueCourseUpdated(tx, courseId, contentVersion, [
-        'modules',
-      ]);
+      await this.courseEvents.enqueueCourseUpdated(tx, courseId, contentVersion, ['modules']);
     });
 
     await this.courseEvents.publishPending();

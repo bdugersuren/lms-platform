@@ -1,4 +1,5 @@
 export type PaymentProvider = 'QPAY' | 'SOCIAL_PAY' | 'MOCK' | 'WALLET';
+export type PaymentPurpose = 'COURSE_PURCHASE' | 'WALLET_TOPUP';
 
 export type PaymentStatus =
   | 'PENDING'
@@ -18,7 +19,9 @@ export interface QPayDeepLink {
 export interface Payment {
   id: string;
   userId: string;
-  courseId: string;
+  purpose: PaymentPurpose;
+  courseId: string | null;
+  walletOwnerId?: string | null;
   amount: string;
   currency: string;
   provider: PaymentProvider;
@@ -27,7 +30,7 @@ export interface Payment {
   // QPay
   invoiceId: string | null;
   qrCode: string | null;
-  qrImage: string | null;   // base64 SVG/PNG
+  qrImage: string | null; // base64 SVG/PNG
   deepLinks: QPayDeepLink[] | null;
 
   // SocialPay
@@ -50,8 +53,9 @@ export interface Paginated<T> {
 }
 
 export interface CreatePaymentDto {
-  courseId: string;
-  amount: number;
+  purpose?: PaymentPurpose;
+  courseId?: string;
+  amount: string;
   provider: PaymentProvider;
   description?: string;
   returnUrl?: string;

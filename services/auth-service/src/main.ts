@@ -23,13 +23,7 @@ async function bootstrap(): Promise<void> {
     options: {
       urls: [process.env.RABBITMQ_URL ?? 'amqp://localhost:5672'],
       queue: 'auth.events',
-      queueOptions: {
-        durable: true,
-        arguments: {
-          'x-dead-letter-exchange': 'lms.dead-letter',
-          'x-dead-letter-routing-key': 'dead',
-        },
-      },
+      queueOptions: { durable: true },
       noAck: false,
       prefetchCount: 10,
     },

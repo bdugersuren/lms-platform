@@ -1,17 +1,11 @@
-import {
-  All,
-  BadGatewayException,
-  Controller,
-  Logger,
-  Req,
-  Res,
-} from '@nestjs/common';
+import { All, BadGatewayException, Controller, Logger, Req, Res } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { lastValueFrom } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
 import * as qs from 'qs';
+import { TenantResolverService } from '../tenant/tenant-resolver.service';
 
 /**
  * Intercepts enrollment/progress operations that are routed under /courses/:courseId
@@ -27,7 +21,10 @@ import * as qs from 'qs';
 export class CourseEnrollmentController {
   private readonly logger = new Logger(CourseEnrollmentController.name);
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly tenantResolver: TenantResolverService,
+  ) {}
 
   // POST /courses/:courseId/enroll → enrollment-service POST /enrollments/by-course/:courseId
   @All('enroll')
@@ -37,7 +34,8 @@ export class CourseEnrollmentController {
   ): Promise<void> {
     const params = req.params as Record<string, string>;
     const courseId = params['courseId'];
-    const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL ?? 'http://enrollment-service:3004';
+    const enrollmentServiceUrl =
+      process.env.ENROLLMENT_SERVICE_URL ?? 'http://enrollment-service:3004';
 
     const method = req.method as AxiosRequestConfig['method'];
     let path: string;
@@ -63,7 +61,8 @@ export class CourseEnrollmentController {
   ): Promise<void> {
     const params = req.params as Record<string, string>;
     const courseId = params['courseId'];
-    const enrollmentServiceUrl = process.env.ENROLLMENT_SERVICE_URL ?? 'http://enrollment-service:3004';
+    const enrollmentServiceUrl =
+      process.env.ENROLLMENT_SERVICE_URL ?? 'http://enrollment-service:3004';
     const url = `${enrollmentServiceUrl}/api/enrollments/admin/course/${courseId}`;
     await this.forward(req, reply, url);
   }
@@ -76,10 +75,12 @@ export class CourseEnrollmentController {
     const queryString = qs.stringify(req.query, { encode: false, arrayFormat: 'repeat' });
     const url = queryString ? `${targetUrl}?${queryString}` : targetUrl;
 
+    const tenantHeaders = await this.tenantResolver.buildForwardHeaders(req);
     const forwardHeaders: Record<string, string> = {
       'content-type': (req.headers['content-type'] as string) ?? 'application/json',
       'x-correlation-id': (req.headers['x-correlation-id'] as string) ?? '',
       'x-forwarded-for': req.ip ?? '',
+      ...tenantHeaders,
     };
 
     if (req.headers['authorization']) {

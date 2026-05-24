@@ -18,20 +18,19 @@ async function bootstrap(): Promise<void> {
   });
 
   const rabbitmqUrl = process.env.RABBITMQ_URL ?? 'amqp://localhost:5672';
-  const dlqArgs = { 'x-dead-letter-exchange': 'lms.dead-letter', 'x-dead-letter-routing-key': 'dead' };
 
-  // Consume enrollment events for revenue distribution
+  // Consume enrollment events for revenue distribution — must match enrollment-service's declaration (no DLX).
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
       urls: [rabbitmqUrl],
       queue: 'enrollment.publisher',
-      queueOptions: { durable: true, arguments: dlqArgs },
+      queueOptions: { durable: true },
       noAck: false,
     },
   });
 
-  // Consume course events for local CourseProjection (eliminates HTTP coupling to course-service)
+  // Consume course events for local CourseProjection.
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
@@ -40,7 +39,7 @@ async function bootstrap(): Promise<void> {
       exchangeType: 'topic',
       routingKey: 'course.#',
       queue: 'wallet.course-events',
-      queueOptions: { durable: true, arguments: dlqArgs },
+      queueOptions: { durable: true },
       noAck: false,
     },
   });

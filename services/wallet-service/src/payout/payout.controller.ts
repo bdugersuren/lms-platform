@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
@@ -14,7 +15,11 @@ import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { PayoutService } from './payout.service';
 import { CreatePayoutDto } from './dto/create-payout.dto';
 
-interface JwtUser { sub: string; email: string; role: string }
+interface JwtUser {
+  sub: string;
+  email: string;
+  role: string;
+}
 
 @ApiTags('Payouts')
 @ApiBearerAuth('access-token')
@@ -28,8 +33,9 @@ export class PayoutController {
   async requestPayout(
     @CurrentUser() user: JwtUser,
     @Body() dto: CreatePayoutDto,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.payoutService.requestPayout(user.sub, dto);
+    const data = await this.payoutService.requestPayout(user.sub, dto, tenantId);
     return ApiResponseBuilder.success(data, 'Payout request submitted');
   }
 
@@ -41,15 +47,24 @@ export class PayoutController {
     @CurrentUser() user: JwtUser,
     @Query('page') page = 1,
     @Query('limit') limit = 20,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.payoutService.listMyPayouts(user.sub, Number(page), Number(limit));
+    const data = await this.payoutService.listMyPayouts(
+      user.sub,
+      Number(page),
+      Number(limit),
+      tenantId,
+    );
     return ApiResponseBuilder.success(data);
   }
 
   @Post(':id/complete')
   @ApiOperation({ summary: 'Mark payout as completed (admin)' })
-  async complete(@Param('id', ParseUUIDPipe) id: string) {
-    const data = await this.payoutService.completePayout(id);
+  async complete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const data = await this.payoutService.completePayout(id, tenantId);
     return ApiResponseBuilder.success(data, 'Payout completed');
   }
 
@@ -58,8 +73,9 @@ export class PayoutController {
   async reject(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('reason') reason: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.payoutService.rejectPayout(id, reason);
+    const data = await this.payoutService.rejectPayout(id, reason, tenantId);
     return ApiResponseBuilder.success(data, 'Payout rejected and refunded');
   }
 }

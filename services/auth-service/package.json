@@ -2,7 +2,7 @@
   "name": "@lms/auth-service",
   "version": "0.1.0",
   "private": true,
-  "description": "LMS Auth Service \u2014 registration, login, JWT, refresh tokens",
+  "description": "LMS Auth Service — registration, login, JWT, refresh tokens",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -13,7 +13,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "seed": "ts-node prisma/seed.ts",
+    "seed": "ts-node --transpile-only prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "lint": "eslint src --ext .ts",
     "test": "jest",
@@ -39,6 +39,7 @@
     "prisma": "catalog:",
     "amqp-connection-manager": "catalog:",
     "amqplib": "catalog:",
+    "bcryptjs": "catalog:",
     "class-transformer": "catalog:",
     "class-validator": "catalog:",
     "ioredis": "catalog:",
@@ -52,17 +53,49 @@
     "winston": "catalog:"
   },
   "devDependencies": {
+    "@nestjs/testing": "^10.3.10",
     "@types/amqplib": "catalog:",
+    "@types/bcryptjs": "catalog:",
     "@types/express": "catalog:",
+    "@types/jest": "^29.5.12",
     "@types/node": "catalog:",
     "@types/passport-jwt": "catalog:",
+    "@types/supertest": "^6.0.2",
     "@types/uuid": "catalog:",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.1.5",
     "ts-node": "catalog:",
     "tsconfig-paths": "catalog:",
     "typescript": "catalog:",
     "nodemon": "catalog:"
   },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "coverageDirectory": "../coverage",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "@lms/shared-types": "<rootDir>/../../../packages/shared-types/src",
+      "@lms/shared-utils": "<rootDir>/../../../packages/shared-utils/src",
+      "@lms/shared-auth": "<rootDir>/../../../packages/shared-auth/src",
+      "@lms/shared-config": "<rootDir>/../../../packages/shared-config/src"
+    },
+    "globals": {
+      "ts-jest": {
+        "diagnostics": false
+      }
+    }
+  },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node --transpile-only prisma/seed.ts"
   }
 }

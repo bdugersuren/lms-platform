@@ -37,11 +37,19 @@ export class TokenService {
     email: string,
     role: UserRole,
     meta?: SessionMeta,
+    activeTenantId = 'demo',
   ): Promise<IAuthTokens> {
     const jti = uuidv4();
     const tokenId = uuidv4();
 
-    const accessPayload: JwtPayload = { sub: userId, email, role, jti };
+    const accessPayload: JwtPayload = {
+      sub: userId,
+      email,
+      role,
+      jti,
+      activeTenantId,
+      tenantMemberships: [{ tenantId: activeTenantId, role }],
+    };
     const refreshPayload: JwtRefreshPayload = { sub: userId, tokenId };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -70,9 +78,7 @@ export class TokenService {
       },
     });
 
-    const expiresIn = this.parseExpiresIn(
-      this.config.get<string>('jwt.expiresIn', '15m'),
-    );
+    const expiresIn = this.parseExpiresIn(this.config.get<string>('jwt.expiresIn', '15m'));
 
     return { accessToken, refreshToken, expiresIn, tokenType: 'Bearer' };
   }
@@ -105,7 +111,7 @@ export class TokenService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, isActive: true },
+      select: { id: true, tenantId: true, email: true, role: true, isActive: true },
     });
 
     if (!user || !user.isActive) {
@@ -115,7 +121,14 @@ export class TokenService {
     // Issue new tokens
     const jti = uuidv4();
     const newTokenId = uuidv4();
-    const accessPayload: JwtPayload = { sub: user.id, email: user.email, role: user.role as UserRole, jti };
+    const accessPayload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role as UserRole,
+      jti,
+      activeTenantId: user.tenantId,
+      tenantMemberships: [{ tenantId: user.tenantId, role: user.role as UserRole }],
+    };
     const refreshPayload: JwtRefreshPayload = { sub: user.id, tokenId: newTokenId };
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -148,9 +161,7 @@ export class TokenService {
       },
     });
 
-    const expiresIn = this.parseExpiresIn(
-      this.config.get<string>('jwt.expiresIn', '15m'),
-    );
+    const expiresIn = this.parseExpiresIn(this.config.get<string>('jwt.expiresIn', '15m'));
 
     return { accessToken, refreshToken, expiresIn, tokenType: 'Bearer' };
   }
@@ -195,9 +206,7 @@ export class TokenService {
 
   async revokeAllUserTokens(userId: string): Promise<void> {
     await this.prisma.refreshToken.deleteMany({ where: { userId } });
-    const jwtTtl = this.parseExpiresIn(
-      this.config.get<string>('jwt.expiresIn', '15m'),
-    );
+    const jwtTtl = this.parseExpiresIn(this.config.get<string>('jwt.expiresIn', '15m'));
     const key = this.redis.buildUserBlacklistKey(userId);
     await this.redis.set(key, String(Math.floor(Date.now() / 1000)), jwtTtl);
   }
@@ -209,15 +218,22 @@ export class TokenService {
     if (/iPhone/i.test(userAgent)) return 'iPhone';
     if (/iPad/i.test(userAgent)) return 'iPad';
     if (/Android/i.test(userAgent)) return 'Android';
-    const os = /Windows NT/i.test(userAgent) ? 'Windows'
-      : /Mac OS X/i.test(userAgent) ? 'Mac'
-      : /Linux/i.test(userAgent) ? 'Linux'
-      : null;
-    const browser = /Edg\//i.test(userAgent) ? 'Edge'
-      : /Chrome\//i.test(userAgent) ? 'Chrome'
-      : /Firefox\//i.test(userAgent) ? 'Firefox'
-      : /Safari\//i.test(userAgent) ? 'Safari'
-      : null;
+    const os = /Windows NT/i.test(userAgent)
+      ? 'Windows'
+      : /Mac OS X/i.test(userAgent)
+        ? 'Mac'
+        : /Linux/i.test(userAgent)
+          ? 'Linux'
+          : null;
+    const browser = /Edg\//i.test(userAgent)
+      ? 'Edge'
+      : /Chrome\//i.test(userAgent)
+        ? 'Chrome'
+        : /Firefox\//i.test(userAgent)
+          ? 'Firefox'
+          : /Safari\//i.test(userAgent)
+            ? 'Safari'
+            : null;
     if (browser && os) return `${browser} on ${os}`;
     return browser ?? os ?? 'Unknown device';
   }

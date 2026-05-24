@@ -1,14 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
+  IsDecimal,
   IsEnum,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
-  Min,
   ValidateIf,
 } from 'class-validator';
+import { normalizeMoneyInput } from '@lms/shared-money';
 
 export enum PaymentProviderDto {
   QPAY = 'QPAY',
@@ -28,15 +28,19 @@ export class CreatePaymentDto {
   @IsOptional()
   purpose: PaymentPurposeDto = PaymentPurposeDto.COURSE_PURCHASE;
 
-  @ApiProperty({ example: 'uuid-of-course', required: false, description: 'COURSE_PURCHASE үед заавал' })
+  @ApiProperty({
+    example: 'uuid-of-course',
+    required: false,
+    description: 'COURSE_PURCHASE үед заавал',
+  })
   @ValidateIf((o) => o.purpose !== PaymentPurposeDto.WALLET_TOPUP)
-  @IsUUID()
+  @IsString()
   courseId?: string;
 
-  @ApiProperty({ example: 99000, description: 'Amount in MNT' })
-  @IsNumber()
-  @Min(1000)
-  amount: number;
+  @ApiProperty({ example: '99000.00', description: 'Amount as decimal string in MNT' })
+  @Transform(({ value }) => normalizeMoneyInput(value))
+  @IsDecimal({ decimal_digits: '0,2' })
+  amount: string;
 
   @ApiProperty({ enum: PaymentProviderDto, example: 'QPAY' })
   @IsEnum(PaymentProviderDto)

@@ -32,7 +32,7 @@ interface CourseListItem { id: string; status: string; }
 interface LessonFull { id: string; title: string; sortOrder: number; moduleId: string; lessonType: string; passingScore: number; unlockNextOnPass: boolean; }
 interface ModuleFull  { id: string; title: string; sortOrder: number; lessons: LessonFull[]; }
 interface CourseFull  {
-  id: string; title: string; slug: string; instructorId: string;
+  id: string; tenantId?: string; title: string; slug: string; instructorId: string;
   price: string; status: string; isSequential: boolean;
   totalLessons: number; totalMinutes: number; contentVersion: number;
   publishedAt: string | null; modules: ModuleFull[];
@@ -71,6 +71,7 @@ async function upsertProjection(course: CourseFull): Promise<void> {
       where: { courseId: course.id },
       create: {
         courseId: course.id,
+        tenantId: course.tenantId ?? 'demo',
         title: course.title,
         slug: course.slug,
         instructorId: course.instructorId ?? 'unknown',
@@ -83,6 +84,7 @@ async function upsertProjection(course: CourseFull): Promise<void> {
         publishedAt: course.publishedAt ? new Date(course.publishedAt) : null,
       },
       update: {
+        tenantId: course.tenantId ?? 'demo',
         title: course.title,
         slug: course.slug,
         instructorId: course.instructorId ?? 'unknown',

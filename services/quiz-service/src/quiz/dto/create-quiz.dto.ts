@@ -5,19 +5,18 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   Max,
   Min,
 } from 'class-validator';
 
 export class CreateQuizDto {
   @ApiProperty({ description: 'Course ID this quiz belongs to' })
-  @IsUUID()
+  @IsString()
   courseId!: string;
 
   @ApiPropertyOptional({ description: 'Lesson ID (optional — quiz can be standalone)' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   lessonId?: string;
 
   @ApiProperty({ description: 'Quiz title' })

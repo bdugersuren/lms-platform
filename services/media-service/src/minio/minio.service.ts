@@ -48,6 +48,8 @@ export class MinioService implements OnModuleInit {
   private readonly client: Minio.Client;
   readonly bucket: string;
   private readonly publicUrl: string;
+  private readonly internalBase: string;
+  private readonly publicStoreUrl: string;
   readonly presignExpires: number;
 
   constructor(private readonly config: ConfigService) {
@@ -55,10 +57,18 @@ export class MinioService implements OnModuleInit {
     this.publicUrl = config.get<string>('MINIO_PUBLIC_URL', 'http://localhost:9000');
     this.presignExpires = config.get<number>('PRESIGN_EXPIRES_SECONDS', 7200);
 
+    const endpoint = config.get<string>('MINIO_ENDPOINT', 'minio');
+    const port = config.get<number>('MINIO_PORT', 9000);
+    const useSSL = config.get<string>('MINIO_USE_SSL', 'false') === 'true';
+    this.internalBase = `${useSSL ? 'https' : 'http'}://${endpoint}:${port}`;
+    // Presigned URLs are rewritten to go through the nginx /minio-store/ proxy.
+    // nginx forwards with Host: minio:9000 so MinIO signature verification succeeds.
+    this.publicStoreUrl = config.get<string>('MINIO_PUBLIC_STORE_URL', 'http://localhost/minio-store');
+
     this.client = new Minio.Client({
-      endPoint: config.get<string>('MINIO_ENDPOINT', 'minio'),
-      port: config.get<number>('MINIO_PORT', 9000),
-      useSSL: config.get<string>('MINIO_USE_SSL', 'false') === 'true',
+      endPoint: endpoint,
+      port,
+      useSSL,
       accessKey: config.get<string>('MINIO_ACCESS_KEY', 'minioadmin'),
       secretKey: config.get<string>('MINIO_SECRET_KEY', 'minioadmin'),
     });
@@ -108,7 +118,10 @@ export class MinioService implements OnModuleInit {
 
   async presignedPutObject(key: string, expiresSeconds?: number): Promise<string> {
     const expires = expiresSeconds ?? this.presignExpires;
-    return this.client.presignedPutObject(this.bucket, key, expires);
+    const url = await this.client.presignedPutObject(this.bucket, key, expires);
+    // Rewrite internal MinIO host to nginx proxy so browsers can reach it with CORS.
+    // nginx forwards Host: minio:9000 so MinIO signature verification still passes.
+    return url.replace(this.internalBase, this.publicStoreUrl);
   }
 
   async downloadToFile(key: string, destPath: string): Promise<void> {

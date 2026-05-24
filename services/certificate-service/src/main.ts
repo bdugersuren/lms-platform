@@ -11,9 +11,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  const dlqArgs = { 'x-dead-letter-exchange': 'lms.dead-letter', 'x-dead-letter-routing-key': 'dead' };
-
-  // RabbitMQ consumer for event-driven certificate issuance
+  // RabbitMQ consumer for event-driven certificate issuance.
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
@@ -22,7 +20,7 @@ async function bootstrap(): Promise<void> {
       exchangeType: 'topic',
       routingKey: 'enrollment.#',
       queue: 'certificate.events',
-      queueOptions: { durable: true, arguments: dlqArgs },
+      queueOptions: { durable: true },
       noAck: false,
     },
   });

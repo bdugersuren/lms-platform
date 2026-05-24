@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TenantRole {
+  OWNER
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+model Tenant {
+  id                 String       @id @default(uuid())
+  slug               String       @unique
+  name               String
+  nameMn             String?      @map("name_mn")
+  tagline            String?
+  taglineMn          String?      @map("tagline_mn")
+  status             TenantStatus @default(ACTIVE)
+  locale             String       @default("mn")
+  defaultCurrency    String       @default("MNT") @map("default_currency")
+  platformFeePercent Decimal      @default(20) @map("platform_fee_percent") @db.Decimal(5, 2)
+  settings           Json?
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  domains     TenantDomain[]
+  memberships TenantMembership[]
+  branding    TenantBranding?
+
+  @@index([status])
+  @@map("tenants")
+}
+
+model TenantDomain {
+  id         String    @id @default(uuid())
+  tenantId   String    @map("tenant_id")
+  domain     String    @unique
+  isPrimary  Boolean   @default(false) @map("is_primary")
+  verifiedAt DateTime? @map("verified_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_domains")
+}
+
+model TenantMembership {
+  id        String     @id @default(uuid())
+  tenantId  String     @map("tenant_id")
+  userId    String     @map("user_id")
+  role      TenantRole @default(STUDENT)
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@index([tenantId, role])
+  @@map("tenant_memberships")
+}
+
+model TenantBranding {
+  id               String   @id @default(uuid())
+  tenantId         String   @unique @map("tenant_id")
+  logo             String?
+  logoDark         String?  @map("logo_dark")
+  favicon          String?
+  primaryColor     String   @default("#6366f1") @map("primary_color")
+  secondaryColor   String   @default("#8b5cf6") @map("secondary_color")
+  accentColor      String   @default("#06b6d4") @map("accent_color")
+  fontFamily       String?  @map("font_family")
+  darkModeEnabled  Boolean  @default(false) @map("dark_mode_enabled")
+  buttonStyle      String   @default("rounded") @map("button_style")
+  cardStyle        String   @default("shadow") @map("card_style")
+  seoTitle         String   @map("seo_title")
+  seoDescription   String   @map("seo_description")
+  seoKeywords      String?  @map("seo_keywords")
+  ogImage          String?  @map("og_image")
+  features         Json
+  navigation       Json
+  homepageSections Json     @map("homepage_sections")
+  footer           Json
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_branding")
+}

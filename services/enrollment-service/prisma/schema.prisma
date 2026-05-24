@@ -15,6 +15,7 @@ enum ProgressStatus {
 
 model Enrollment {
   id              String    @id @default(uuid())
+  tenantId        String    @default("demo") @map("tenant_id")
   courseId        String    @map("course_id")
   studentId       String    @map("student_id")
   progressPercent Float     @default(0) @map("progress_percent")
@@ -28,7 +29,8 @@ model Enrollment {
   quizAttemptRecords     QuizAttemptRecord[]
   assignmentGradeRecords AssignmentGradeRecord[]
 
-  @@unique([courseId, studentId])
+  @@unique([tenantId, courseId, studentId])
+  @@index([tenantId])
   @@index([studentId])
   @@index([courseId])
   @@index([paymentId])
@@ -120,6 +122,7 @@ model MigrationRun {
 
 model CourseProjection {
   courseId              String    @id @map("course_id")
+  tenantId              String    @default("demo") @map("tenant_id")
   title                 String
   slug                  String
   instructorId          String    @map("instructor_id")
@@ -140,6 +143,7 @@ model CourseProjection {
   modules ModuleProjection[]
   lessons LessonProjection[]
 
+  @@index([tenantId])
   @@index([status])
   @@index([instructorId])
   @@map("course_projections")

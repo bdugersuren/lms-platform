@@ -4,7 +4,7 @@ import { IsArray, IsOptional, IsString, IsUUID, ValidateNested } from 'class-val
 
 export class AnswerItemDto {
   @ApiProperty()
-  @IsUUID()
+  @IsString()
   questionId: string;
 
   @ApiPropertyOptional({ type: [String] })

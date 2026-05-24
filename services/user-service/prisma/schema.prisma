@@ -16,7 +16,7 @@ datasource db {
 
 model UserProfile {
   id            String   @id
-  tenantId      String?  @map("tenant_id")
+  tenantId      String   @default("demo") @map("tenant_id")
   displayName   String   @map("display_name")
   firstName     String?  @map("first_name")
   lastName      String?  @map("last_name")

@@ -2,7 +2,7 @@
   "name": "@lms/payment-service",
   "version": "0.1.0",
   "private": true,
-  "description": "LMS Payment Service \u2014 QPay, SocialPay, payment verification, webhook handling",
+  "description": "LMS Payment Service — QPay, SocialPay, payment verification, webhook handling",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -15,11 +15,15 @@
     "seed": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "lint": "eslint src --ext .ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage"
   },
   "dependencies": {
     "@lms/shared-auth": "workspace:*",
     "@lms/shared-config": "workspace:*",
+    "@lms/shared-money": "workspace:*",
     "@lms/shared-types": "workspace:*",
     "@lms/shared-utils": "workspace:*",
     "@nestjs/common": "catalog:",
@@ -46,14 +50,44 @@
     "winston": "catalog:"
   },
   "devDependencies": {
+    "@nestjs/testing": "^10.3.10",
     "@types/amqplib": "catalog:",
     "@types/express": "catalog:",
+    "@types/jest": "^29.5.12",
     "@types/node": "catalog:",
     "@types/passport-jwt": "catalog:",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.5",
     "ts-node": "catalog:",
     "tsconfig-paths": "catalog:",
     "typescript": "catalog:",
     "nodemon": "catalog:"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "coverageDirectory": "../coverage",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "@lms/shared-types": "<rootDir>/../../../packages/shared-types/src",
+      "@lms/shared-utils": "<rootDir>/../../../packages/shared-utils/src",
+      "@lms/shared-auth": "<rootDir>/../../../packages/shared-auth/src",
+      "@lms/shared-config": "<rootDir>/../../../packages/shared-config/src",
+      "@lms/shared-money": "<rootDir>/../../../packages/shared-money/src"
+    },
+    "globals": {
+      "ts-jest": {
+        "diagnostics": false
+      }
+    }
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

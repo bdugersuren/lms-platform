@@ -13,8 +13,17 @@ export class SubtitleService {
     private readonly minio: MinioService,
   ) {}
 
-  async upload(userId: string, mediaFileId: string, file: Express.Multer.File, language: string, label: string) {
-    const mediaFile = await this.prisma.mediaFile.findFirst({ where: { id: mediaFileId, userId } });
+  async upload(
+    userId: string,
+    mediaFileId: string,
+    file: Express.Multer.File,
+    language: string,
+    label: string,
+    tenantId = 'demo',
+  ) {
+    const mediaFile = await this.prisma.mediaFile.findFirst({
+      where: { id: mediaFileId, userId, tenantId },
+    });
     if (!mediaFile) throw new NotFoundException('Media file not found');
 
     const mime = file.mimetype;
@@ -33,8 +42,10 @@ export class SubtitleService {
     });
   }
 
-  async list(userId: string, mediaFileId: string) {
-    const mediaFile = await this.prisma.mediaFile.findFirst({ where: { id: mediaFileId, userId } });
+  async list(userId: string, mediaFileId: string, tenantId = 'demo') {
+    const mediaFile = await this.prisma.mediaFile.findFirst({
+      where: { id: mediaFileId, userId, tenantId },
+    });
     if (!mediaFile) throw new NotFoundException('Media file not found');
     return this.prisma.subtitle.findMany({
       where: { mediaFileId },
@@ -42,15 +53,23 @@ export class SubtitleService {
     });
   }
 
-  async remove(userId: string, subtitleId: string) {
+  async remove(userId: string, subtitleId: string, tenantId = 'demo') {
     const subtitle = await this.prisma.subtitle.findUnique({
       where: { id: subtitleId },
       include: { mediaFile: true },
     });
-    if (!subtitle || subtitle.mediaFile.userId !== userId) {
+    if (
+      !subtitle ||
+      subtitle.mediaFile.userId !== userId ||
+      subtitle.mediaFile.tenantId !== tenantId
+    ) {
       throw new NotFoundException('Subtitle not found');
     }
-    try { await this.minio.delete(subtitle.key); } catch { /* already gone */ }
+    try {
+      await this.minio.delete(subtitle.key);
+    } catch {
+      /* already gone */
+    }
     await this.prisma.subtitle.delete({ where: { id: subtitleId } });
   }
 }

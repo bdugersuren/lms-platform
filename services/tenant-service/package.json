@@ -1,0 +1,54 @@
+{
+  "name": "@lms/tenant-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LMS Tenant Service — tenant resolution, domains, branding, features, and memberships",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.json --watch",
+    "start": "node dist/main.js",
+    "start:dev": "nodemon --config ../../nodemon.svc.json",
+    "start:dev:once": "ts-node --transpile-only -r tsconfig-paths/register src/main.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "seed": "ts-node --transpile-only prisma/seed.ts",
+    "prisma:studio": "prisma studio",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@lms/shared-auth": "workspace:*",
+    "@lms/shared-config": "workspace:*",
+    "@lms/shared-types": "workspace:*",
+    "@lms/shared-utils": "workspace:*",
+    "@nestjs/common": "catalog:",
+    "@nestjs/config": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/passport": "catalog:",
+    "@nestjs/platform-express": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "@nestjs/terminus": "catalog:",
+    "swagger-ui-express": "catalog:",
+    "@prisma/client": "catalog:",
+    "prisma": "catalog:",
+    "class-transformer": "catalog:",
+    "class-validator": "catalog:",
+    "joi": "catalog:",
+    "passport": "catalog:",
+    "passport-jwt": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/passport-jwt": "catalog:",
+    "nodemon": "catalog:",
+    "ts-node": "catalog:",
+    "tsconfig-paths": "catalog:",
+    "typescript": "catalog:"
+  },
+  "prisma": {
+    "seed": "ts-node --transpile-only prisma/seed.ts"
+  }
+}

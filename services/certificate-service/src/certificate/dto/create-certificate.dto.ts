@@ -3,7 +3,7 @@ import { IsDateString, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateCertificateDto {
   @ApiProperty({ example: 'user-uuid' })
-  @IsUUID()
+  @IsString()
   userId: string;
 
   @ApiProperty({ example: 'Certificate of Completion' })
@@ -16,7 +16,7 @@ export class CreateCertificateDto {
 
   @ApiPropertyOptional({ example: 'course-uuid' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   courseId?: string;
 
   @ApiPropertyOptional({ example: 'Advanced Web Development' })

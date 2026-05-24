@@ -5,6 +5,7 @@ import { ROUTING_KEYS } from '../messaging/messaging.constants';
 
 interface UserRegisteredEvent {
   userId: string;
+  tenantId?: string;
   email: string;
   role: string;
   timestamp: string;
@@ -20,7 +21,7 @@ export class EventListenerService {
   async onUserRegistered(@Payload() event: UserRegisteredEvent): Promise<void> {
     this.logger.log(`User registered event: userId=${event.userId} email=${event.email}`);
     try {
-      await this.userService.bootstrap(event.userId, event.email);
+      await this.userService.bootstrap(event.userId, event.email, event.tenantId ?? 'demo');
     } catch (err) {
       this.logger.error(`Profile bootstrap failed for user ${event.userId}`, err);
     }

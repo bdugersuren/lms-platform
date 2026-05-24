@@ -15,9 +15,9 @@ export class TranscodeService {
     private readonly messaging: MessagingService,
   ) {}
 
-  async queue(userId: string, mediaFileId: string, dto: CreateTranscodeDto) {
+  async queue(userId: string, mediaFileId: string, dto: CreateTranscodeDto, tenantId = 'demo') {
     const file = await this.prisma.mediaFile.findFirst({
-      where: { id: mediaFileId, userId },
+      where: { id: mediaFileId, userId, tenantId },
     });
     if (!file) throw new NotFoundException('Media file not found');
     if (file.mediaType !== 'VIDEO') {
@@ -25,9 +25,14 @@ export class TranscodeService {
     }
 
     const existing = await this.prisma.transcodeJob.findFirst({
-      where: { mediaFileId, format: dto.format, status: { in: [TranscodeStatus.PENDING, TranscodeStatus.PROCESSING] } },
+      where: {
+        mediaFileId,
+        format: dto.format,
+        status: { in: [TranscodeStatus.PENDING, TranscodeStatus.PROCESSING] },
+      },
     });
-    if (existing) throw new BadRequestException('A transcode job with this format is already queued');
+    if (existing)
+      throw new BadRequestException('A transcode job with this format is already queued');
 
     const job = await this.prisma.transcodeJob.create({
       data: { mediaFileId, format: dto.format, status: TranscodeStatus.PENDING },
@@ -36,6 +41,7 @@ export class TranscodeService {
     // Emit event — a separate worker process would pick this up and run FFmpeg
     this.messaging.emit(EventTypes.MEDIA_TRANSCODE_QUEUED, {
       jobId: job.id,
+      tenantId: file.tenantId,
       mediaFileId,
       sourceKey: file.key,
       format: dto.format,
@@ -44,17 +50,19 @@ export class TranscodeService {
     return job;
   }
 
-  async getJob(jobId: string) {
-    const job = await this.prisma.transcodeJob.findUnique({
-      where: { id: jobId },
+  async getJob(jobId: string, tenantId = 'demo') {
+    const job = await this.prisma.transcodeJob.findFirst({
+      where: { id: jobId, mediaFile: { tenantId } },
       include: { mediaFile: { select: { id: true, title: true, originalName: true } } },
     });
     if (!job) throw new NotFoundException('Transcode job not found');
     return job;
   }
 
-  async listJobs(userId: string, mediaFileId: string) {
-    const file = await this.prisma.mediaFile.findFirst({ where: { id: mediaFileId, userId } });
+  async listJobs(userId: string, mediaFileId: string, tenantId = 'demo') {
+    const file = await this.prisma.mediaFile.findFirst({
+      where: { id: mediaFileId, userId, tenantId },
+    });
     if (!file) throw new NotFoundException('Media file not found');
     return this.prisma.transcodeJob.findMany({
       where: { mediaFileId },

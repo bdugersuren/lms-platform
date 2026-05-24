@@ -28,6 +28,7 @@ import { createHash } from 'crypto';
 
 interface CourseEnrollmentRow {
   id: string;
+  tenant_id: string | null;
   course_id: string;
   student_id: string;
   progress_percent: number;
@@ -113,7 +114,7 @@ function err(msg: string, e?: unknown) {
 
 function checksumRow(row: CourseEnrollmentRow): string {
   return createHash('md5')
-    .update(`${row.id}|${row.course_id}|${row.student_id}|${row.completed}`)
+    .update(`${row.id}|${row.tenant_id ?? 'demo'}|${row.course_id}|${row.student_id}|${row.completed}`)
     .digest('hex');
 }
 
@@ -176,14 +177,17 @@ async function migrateEnrollmentBatch(
 
       // Migrate everything in a single transaction
       await enrollPrisma.$transaction(async (tx) => {
+        const tenantId = ce.tenant_id ?? 'demo';
+
         // 1. Find or create Enrollment in enrollment-service
         let enrollment = await tx.enrollment.findUnique({
-          where: { courseId_studentId: { courseId: ce.course_id, studentId: ce.student_id } },
+          where: { tenantId_courseId_studentId: { tenantId, courseId: ce.course_id, studentId: ce.student_id } },
         });
 
         if (!enrollment) {
           enrollment = await tx.enrollment.create({
             data: {
+              tenantId,
               courseId: ce.course_id,
               studentId: ce.student_id,
               progressPercent: ce.progress_percent,
@@ -378,10 +382,18 @@ async function main() {
 
   while (true) {
     const batch = await coursePrisma.$queryRaw<CourseEnrollmentRow[]>`
-      SELECT id, course_id, student_id, progress_percent, total_score, completed,
-             enrolled_at, completed_at
-      FROM course_enrollments
-      ORDER BY enrolled_at ASC
+      SELECT ce.id,
+             c.tenant_id,
+             ce.course_id,
+             ce.student_id,
+             ce.progress_percent,
+             ce.total_score,
+             ce.completed,
+             ce.enrolled_at,
+             ce.completed_at
+      FROM course_enrollments ce
+      LEFT JOIN courses c ON c.id = ce.course_id
+      ORDER BY ce.enrolled_at ASC
       LIMIT ${BATCH_SIZE} OFFSET ${offset}
     `;
 

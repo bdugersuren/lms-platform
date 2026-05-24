@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -62,8 +63,12 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 409, description: 'Email already exists' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  async register(@Body() dto: RegisterDto, @Req() req: Request) {
-    const tokens = await this.authService.register(dto, this.extractMeta(req));
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: Request,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const tokens = await this.authService.register(dto, this.extractMeta(req), tenantId);
     return ApiResponseBuilder.created(tokens, 'Registration successful');
   }
 
@@ -86,8 +91,12 @@ export class AuthController {
   })
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() dto: LoginDto, @Req() req: Request) {
-    const tokens = await this.authService.login(dto, this.extractMeta(req));
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const tokens = await this.authService.login(dto, this.extractMeta(req), tenantId);
     return ApiResponseBuilder.success(tokens, 'Login successful');
   }
 
@@ -107,11 +116,12 @@ export class AuthController {
   })
   @ApiResponse({ status: 200, description: 'Tokens refreshed successfully' })
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
-  async refresh(
-    @Body() dto: RefreshTokenDto,
-    @Req() req: Request & { user: JwtRefreshPayload },
-  ) {
-    const tokens = await this.authService.refreshTokens(dto.refreshToken, req.user, this.extractMeta(req));
+  async refresh(@Body() dto: RefreshTokenDto, @Req() req: Request & { user: JwtRefreshPayload }) {
+    const tokens = await this.authService.refreshTokens(
+      dto.refreshToken,
+      req.user,
+      this.extractMeta(req),
+    );
     return ApiResponseBuilder.success(tokens, 'Token refreshed successfully');
   }
 
@@ -207,10 +217,7 @@ export class AuthController {
   })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized or wrong current password' })
-  async changePassword(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: ChangePasswordDto,
-  ) {
+  async changePassword(@CurrentUser() user: JwtPayload, @Body() dto: ChangePasswordDto) {
     await this.authService.changePassword(user.sub, dto);
     return ApiResponseBuilder.success(null, 'Password changed successfully');
   }
@@ -228,8 +235,8 @@ export class AuthController {
   @ApiQuery({ name: 'role', required: false, enum: UserRole })
   @ApiResponse({ status: 200, description: 'Users listed successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  async listUsers(@Query() query: UserQueryDto) {
-    const result = await this.authService.listUsers(query);
+  async listUsers(@Query() query: UserQueryDto, @Headers('x-tenant-id') tenantId = 'demo') {
+    const result = await this.authService.listUsers(query, tenantId);
     return ApiResponseBuilder.success(result, 'Users retrieved');
   }
 
@@ -251,15 +258,9 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'User status updated' })
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  async updateUserStatus(
-    @Param('id') id: string,
-    @Body() dto: UpdateUserStatusDto,
-  ) {
+  async updateUserStatus(@Param('id') id: string, @Body() dto: UpdateUserStatusDto) {
     await this.authService.updateUserStatus(id, dto.isActive);
-    return ApiResponseBuilder.success(
-      null,
-      dto.isActive ? 'User activated' : 'User deactivated',
-    );
+    return ApiResponseBuilder.success(null, dto.isActive ? 'User activated' : 'User deactivated');
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────

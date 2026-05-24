@@ -10,9 +10,19 @@ import { QueryMediaDto } from './dto/query-media.dto';
 import { PresignUploadDto } from './dto/presign-upload.dto';
 
 const ALLOWED_MIME = new Set([
-  'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
-  'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/aac',
-  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'video/quicktime',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'audio/aac',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
   'application/pdf',
 ]);
 
@@ -32,12 +42,14 @@ export class MediaService {
 
   // ─── Upload ───────────────────────────────────────────────────────────────
 
-  async upload(userId: string, file: Express.Multer.File) {
+  async upload(userId: string, file: Express.Multer.File, tenantId = 'demo') {
     if (!ALLOWED_MIME.has(file.mimetype)) {
       throw new BadRequestException(`Unsupported file type: ${file.mimetype}`);
     }
     if (file.size > this.maxSizeBytes) {
-      throw new BadRequestException(`File exceeds ${this.config.get('UPLOAD_MAX_SIZE_MB', 500)}MB limit`);
+      throw new BadRequestException(
+        `File exceeds ${this.config.get('UPLOAD_MAX_SIZE_MB', 500)}MB limit`,
+      );
     }
     if (file.size === 0) throw new BadRequestException('Empty file');
 
@@ -48,6 +60,7 @@ export class MediaService {
     const record = await this.prisma.mediaFile.create({
       data: {
         userId,
+        tenantId,
         key,
         url,
         originalName: file.originalname,
@@ -61,6 +74,7 @@ export class MediaService {
 
     this.messaging.emit(EventTypes.MEDIA_FILE_UPLOADED, {
       mediaFileId: record.id,
+      tenantId: record.tenantId,
       userId,
       mediaType,
       key,
@@ -72,12 +86,14 @@ export class MediaService {
 
   // ─── Presigned upload (browser → MinIO directly) ─────────────────────────
 
-  async createPresignedUpload(userId: string, dto: PresignUploadDto) {
+  async createPresignedUpload(userId: string, dto: PresignUploadDto, tenantId = 'demo') {
     if (!ALLOWED_MIME.has(dto.mimeType)) {
       throw new BadRequestException(`Unsupported file type: ${dto.mimeType}`);
     }
     if (dto.size > this.maxSizeBytes) {
-      throw new BadRequestException(`File exceeds ${this.config.get('UPLOAD_MAX_SIZE_MB', 500)}MB limit`);
+      throw new BadRequestException(
+        `File exceeds ${this.config.get('UPLOAD_MAX_SIZE_MB', 500)}MB limit`,
+      );
     }
 
     const mediaType = this.minio.resolveMediaType(dto.mimeType);
@@ -87,6 +103,7 @@ export class MediaService {
     const record = await this.prisma.mediaFile.create({
       data: {
         userId,
+        tenantId,
         key,
         url: `${this.minio['publicUrl']}/${this.minio.bucket}/${key}`,
         originalName: dto.filename,
@@ -103,9 +120,9 @@ export class MediaService {
     return { uploadUrl, key, mediaFileId: record.id, expiresAt };
   }
 
-  async finalizeUpload(userId: string, key: string) {
+  async finalizeUpload(userId: string, key: string, tenantId = 'demo') {
     const record = await this.prisma.mediaFile.findFirst({
-      where: { key, userId, status: MediaStatus.UPLOADING },
+      where: { key, userId, tenantId, status: MediaStatus.UPLOADING },
     });
     if (!record) throw new NotFoundException('Pending upload not found');
 
@@ -116,6 +133,7 @@ export class MediaService {
 
     this.messaging.emit(EventTypes.MEDIA_FILE_UPLOADED, {
       mediaFileId: record.id,
+      tenantId: record.tenantId,
       userId,
       mediaType: record.mediaType,
       key,
@@ -127,12 +145,13 @@ export class MediaService {
 
   // ─── List ─────────────────────────────────────────────────────────────────
 
-  async findAll(userId: string, query: QueryMediaDto) {
+  async findAll(userId: string, query: QueryMediaDto, tenantId = 'demo') {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
     const where = {
       userId,
+      tenantId,
       status: { not: MediaStatus.DELETED },
       ...(query.mediaType ? { mediaType: query.mediaType } : {}),
       ...(query.search
@@ -161,9 +180,9 @@ export class MediaService {
 
   // ─── Get one ──────────────────────────────────────────────────────────────
 
-  async findOne(userId: string, id: string) {
+  async findOne(userId: string, id: string, tenantId = 'demo') {
     const file = await this.prisma.mediaFile.findFirst({
-      where: { id, userId, status: { not: MediaStatus.DELETED } },
+      where: { id, userId, tenantId, status: { not: MediaStatus.DELETED } },
       include: { subtitles: true, transcodeJobs: { orderBy: { createdAt: 'desc' } } },
     });
     if (!file) throw new NotFoundException('Media file not found');
@@ -172,8 +191,8 @@ export class MediaService {
 
   // ─── Update metadata ─────────────────────────────────────────────────────
 
-  async update(userId: string, id: string, dto: UpdateMediaDto) {
-    await this.findOne(userId, id);
+  async update(userId: string, id: string, dto: UpdateMediaDto, tenantId = 'demo') {
+    await this.findOne(userId, id, tenantId);
     const updated = await this.prisma.mediaFile.update({
       where: { id },
       data: dto,
@@ -183,8 +202,8 @@ export class MediaService {
 
   // ─── Delete ───────────────────────────────────────────────────────────────
 
-  async remove(userId: string, id: string) {
-    const file = await this.findOne(userId, id);
+  async remove(userId: string, id: string, tenantId = 'demo') {
+    const file = await this.findOne(userId, id, tenantId);
     try {
       await this.minio.delete(file.key);
     } catch (err) {
@@ -194,7 +213,7 @@ export class MediaService {
       where: { id },
       data: { status: MediaStatus.DELETED },
     });
-    this.messaging.emit(EventTypes.MEDIA_FILE_DELETED, { mediaFileId: id, userId });
+    this.messaging.emit(EventTypes.MEDIA_FILE_DELETED, { mediaFileId: id, tenantId, userId });
   }
 
   // ─── Presign ──────────────────────────────────────────────────────────────
@@ -208,7 +227,9 @@ export class MediaService {
 
   // ─── Serialize (BigInt → number) ──────────────────────────────────────────
 
-  private serialize<T extends { size: bigint | number | null }>(record: T): Omit<T, 'size'> & { size: number | null } {
+  private serialize<T extends { size: bigint | number | null }>(
+    record: T,
+  ): Omit<T, 'size'> & { size: number | null } {
     return {
       ...record,
       size: typeof record.size === 'bigint' ? Number(record.size) : (record.size as number | null),

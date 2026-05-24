@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,21 +14,24 @@ export class PayoutService {
     private readonly outbox: OutboxService,
   ) {}
 
-  async requestPayout(ownerId: string, dto: CreatePayoutDto) {
+  async requestPayout(ownerId: string, dto: CreatePayoutDto, tenantId = 'demo') {
     // Debit reserves the amount — throws if insufficient balance
     await this.walletService.debit(
       ownerId,
       dto.amount,
       `Payout request — ${dto.bankName ?? 'bank'}`,
       'PAYOUT',
+      undefined,
+      tenantId,
     );
 
-    const wallet = await this.walletService.findByOwner(ownerId);
+    const wallet = await this.walletService.findByOwner(ownerId, tenantId);
 
     return this.prisma.$transaction(async (tx) => {
       const payout = await tx.payout.create({
         data: {
           walletId: wallet.id,
+          tenantId,
           amount: dto.amount,
           bankName: dto.bankName,
           accountNumber: dto.accountNumber,
@@ -62,17 +61,17 @@ export class PayoutService {
     });
   }
 
-  async listMyPayouts(ownerId: string, page = 1, limit = 20) {
-    const wallet = await this.walletService.findByOwner(ownerId);
+  async listMyPayouts(ownerId: string, page = 1, limit = 20, tenantId = 'demo') {
+    const wallet = await this.walletService.findByOwner(ownerId, tenantId);
 
     const [items, total] = await Promise.all([
       this.prisma.payout.findMany({
-        where: { walletId: wallet.id },
+        where: { walletId: wallet.id, tenantId },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.payout.count({ where: { walletId: wallet.id } }),
+      this.prisma.payout.count({ where: { walletId: wallet.id, tenantId } }),
     ]);
 
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
@@ -93,8 +92,8 @@ export class PayoutService {
     return { processed: pending.length };
   }
 
-  async completePayout(payoutId: string) {
-    const payout = await this.prisma.payout.findUnique({ where: { id: payoutId } });
+  async completePayout(payoutId: string, tenantId = 'demo') {
+    const payout = await this.prisma.payout.findFirst({ where: { id: payoutId, tenantId } });
     if (!payout) throw new NotFoundException('Payout not found');
     if (payout.status === 'COMPLETED') throw new BadRequestException('Already completed');
 
@@ -104,21 +103,23 @@ export class PayoutService {
     });
   }
 
-  async rejectPayout(payoutId: string, reason: string) {
-    const payout = await this.prisma.payout.findUnique({
-      where: { id: payoutId },
+  async rejectPayout(payoutId: string, reason: string, tenantId = 'demo') {
+    const payout = await this.prisma.payout.findFirst({
+      where: { id: payoutId, tenantId },
       include: { wallet: true },
     });
     if (!payout) throw new NotFoundException('Payout not found');
-    if (payout.status === 'COMPLETED') throw new BadRequestException('Cannot reject a completed payout');
+    if (payout.status === 'COMPLETED')
+      throw new BadRequestException('Cannot reject a completed payout');
 
     // Refund amount back to wallet
     await this.walletService.credit(
       payout.wallet.ownerId,
-      Number(payout.amount),
+      payout.amount.toString(),
       `Payout rejected — refund`,
       'REFUND',
       payoutId,
+      tenantId,
     );
 
     return this.prisma.payout.update({

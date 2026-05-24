@@ -13,6 +13,7 @@ const courseServiceUrl = process.env.COURSE_SERVICE_URL ?? 'http://localhost:300
 
 interface CourseItem {
   id: string;
+  tenantId?: string;
   title: string;
   instructorId: string;
   price: string;
@@ -48,6 +49,7 @@ async function run(): Promise<void> {
         where: { courseId: course.id },
         create: {
           courseId: course.id,
+          tenantId: course.tenantId ?? 'demo',
           title: course.title,
           instructorId: course.instructorId ?? 'unknown',
           price: new Prisma.Decimal(course.price ?? '0'),
@@ -56,6 +58,7 @@ async function run(): Promise<void> {
           publishedAt: course.publishedAt ? new Date(course.publishedAt) : null,
         },
         update: {
+          tenantId: course.tenantId ?? 'demo',
           title: course.title,
           instructorId: course.instructorId ?? 'unknown',
           price: new Prisma.Decimal(course.price ?? '0'),

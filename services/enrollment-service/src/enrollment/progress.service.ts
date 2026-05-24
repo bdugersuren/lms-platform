@@ -1,9 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
@@ -25,9 +20,9 @@ export class ProgressService {
     private readonly userClient: UserClientService,
   ) {}
 
-  async startLesson(enrollmentId: string, lessonId: string, studentId: string) {
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { id: enrollmentId },
+  async startLesson(enrollmentId: string, lessonId: string, studentId: string, tenantId = 'demo') {
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { id: enrollmentId, tenantId },
     });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
     if (enrollment.studentId !== studentId) throw new ForbiddenException();
@@ -38,7 +33,12 @@ export class ProgressService {
 
     if (!existing) {
       return this.prisma.lessonProgress.create({
-        data: { enrollmentId, lessonId, status: ProgressStatus.IN_PROGRESS, unlockedAt: new Date() },
+        data: {
+          enrollmentId,
+          lessonId,
+          status: ProgressStatus.IN_PROGRESS,
+          unlockedAt: new Date(),
+        },
       });
     }
 
@@ -58,8 +58,11 @@ export class ProgressService {
     interactiveBlockId: string,
     dto: SubmitBlockAnswersDto,
     studentId: string,
+    tenantId = 'demo',
   ) {
-    const enrollment = await this.prisma.enrollment.findUnique({ where: { id: enrollmentId } });
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { id: enrollmentId, tenantId },
+    });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
     if (enrollment.studentId !== studentId) throw new ForbiddenException();
 
@@ -67,7 +70,8 @@ export class ProgressService {
       where: { enrollmentId_lessonId: { enrollmentId, lessonId } },
     });
     if (!lessonProgress) throw new NotFoundException('Lesson progress not found');
-    if (lessonProgress.status === ProgressStatus.LOCKED) throw new ForbiddenException('Lesson is locked');
+    if (lessonProgress.status === ProgressStatus.LOCKED)
+      throw new ForbiddenException('Lesson is locked');
 
     // Fetch block definition from course-service for answer evaluation
     const block = await this.courseClient.getBlock(interactiveBlockId);
@@ -104,7 +108,12 @@ export class ProgressService {
     // Upsert InteractiveBlockProgress + save answers
     await this.prisma.$transaction(async (tx) => {
       const blockProgress = await tx.interactiveBlockProgress.upsert({
-        where: { lessonProgressId_interactiveBlockId: { lessonProgressId: lessonProgress.id, interactiveBlockId } },
+        where: {
+          lessonProgressId_interactiveBlockId: {
+            lessonProgressId: lessonProgress.id,
+            interactiveBlockId,
+          },
+        },
         create: {
           lessonProgressId: lessonProgress.id,
           interactiveBlockId,
@@ -123,7 +132,9 @@ export class ProgressService {
         },
       });
 
-      await tx.interactiveAnswer.deleteMany({ where: { interactiveBlockProgressId: blockProgress.id } });
+      await tx.interactiveAnswer.deleteMany({
+        where: { interactiveBlockProgressId: blockProgress.id },
+      });
       await tx.interactiveAnswer.createMany({
         data: evaluated.map((a) => ({
           interactiveBlockProgressId: blockProgress.id,
@@ -143,7 +154,14 @@ export class ProgressService {
       });
     });
 
-    return { interactiveBlockId, score: totalScore, maxScore, scorePercent, passed, answers: evaluated };
+    return {
+      interactiveBlockId,
+      score: totalScore,
+      maxScore,
+      scorePercent,
+      passed,
+      answers: evaluated,
+    };
   }
 
   private evaluateAnswer(
@@ -172,9 +190,10 @@ export class ProgressService {
     lessonId: string,
     studentId: string,
     dto: UpdateLessonProgressDto,
+    tenantId = 'demo',
   ) {
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { id: enrollmentId },
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { id: enrollmentId, tenantId },
     });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
     if (enrollment.studentId !== studentId) throw new ForbiddenException();
@@ -203,17 +222,16 @@ export class ProgressService {
     enrollmentId: string,
     lessonId: string,
     studentId: string,
+    tenantId = 'demo',
   ) {
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { id: enrollmentId },
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { id: enrollmentId, tenantId },
       include: { lessonProgresses: true },
     });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
     if (enrollment.studentId !== studentId) throw new ForbiddenException();
 
-    const lessonProgress = enrollment.lessonProgresses.find(
-      (lp) => lp.lessonId === lessonId,
-    );
+    const lessonProgress = enrollment.lessonProgresses.find((lp) => lp.lessonId === lessonId);
     if (!lessonProgress) throw new NotFoundException('Lesson progress not found');
     if (lessonProgress.status === ProgressStatus.LOCKED) {
       throw new ForbiddenException('Lesson is locked');
@@ -232,12 +250,18 @@ export class ProgressService {
 
     this.messaging.publishEvent(EventTypes.LESSON_COMPLETED, {
       enrollmentId,
+      tenantId: enrollment.tenantId,
       courseId: enrollment.courseId,
       lessonId,
       studentId,
     });
 
-    await this.unlockNextLesson(enrollment.courseId, enrollmentId, lessonId, enrollment.lessonProgresses);
+    await this.unlockNextLesson(
+      enrollment.courseId,
+      enrollmentId,
+      lessonId,
+      enrollment.lessonProgresses,
+    );
     await this.recalculateEnrollmentProgress(enrollmentId);
 
     return this.prisma.lessonProgress.findUnique({
@@ -265,7 +289,9 @@ export class ProgressService {
         unlockNextOnPass: l.unlockNextOnPass,
       }))
       .sort((a, b) =>
-        a.moduleOrder !== b.moduleOrder ? a.moduleOrder - b.moduleOrder : a.lessonOrder - b.lessonOrder,
+        a.moduleOrder !== b.moduleOrder
+          ? a.moduleOrder - b.moduleOrder
+          : a.lessonOrder - b.lessonOrder,
       );
   }
 
@@ -283,7 +309,10 @@ export class ProgressService {
       let isSequential = true;
 
       if (projectionLessons && projectionLessons.length > 0) {
-        orderedIds = projectionLessons.map((l) => ({ id: l.lessonId, unlockNextOnPass: l.unlockNextOnPass }));
+        orderedIds = projectionLessons.map((l) => ({
+          id: l.lessonId,
+          unlockNextOnPass: l.unlockNextOnPass,
+        }));
         const proj = await this.prisma.courseProjection.findUnique({
           where: { courseId },
           select: { isSequential: true },
@@ -292,7 +321,9 @@ export class ProgressService {
         this.logger.debug(`unlockNext: using projection for courseId=${courseId}`);
       } else {
         // Fall back to HTTP
-        this.logger.warn(`unlockNext: projection empty for courseId=${courseId}, falling back to HTTP`);
+        this.logger.warn(
+          `unlockNext: projection empty for courseId=${courseId}, falling back to HTTP`,
+        );
         const course = await this.courseClient.getCourse(courseId);
         isSequential = course.isSequential;
         orderedIds = course.modules
@@ -330,9 +361,10 @@ export class ProgressService {
     quizId: string,
     passed: boolean,
     score: number,
+    tenantId = 'demo',
   ): Promise<void> {
     const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_studentId: { courseId, studentId } },
+      where: { tenantId_courseId_studentId: { tenantId, courseId, studentId } },
     });
     if (!enrollment) return;
 
@@ -352,9 +384,10 @@ export class ProgressService {
     passed: boolean,
     score: number,
     maxScore: number,
+    tenantId = 'demo',
   ): Promise<void> {
     const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_studentId: { courseId, studentId } },
+      where: { tenantId_courseId_studentId: { tenantId, courseId, studentId } },
     });
     if (!enrollment) return;
 
@@ -374,9 +407,7 @@ export class ProgressService {
       this.prisma.enrollment
         .findUnique({ where: { id: enrollmentId }, select: { courseId: true } })
         .then((e) =>
-          e
-            ? this.prisma.courseProjection.findUnique({ where: { courseId: e.courseId } })
-            : null,
+          e ? this.prisma.courseProjection.findUnique({ where: { courseId: e.courseId } }) : null,
         ),
     ]);
 
@@ -389,8 +420,7 @@ export class ProgressService {
     const progressPercent = Math.round((completedCount / total) * 100);
     const allLessonsDone = completedCount === total;
 
-    const totalScore =
-      progresses.reduce((sum, lp) => sum + (lp.score ?? 0), 0) / total;
+    const totalScore = progresses.reduce((sum, lp) => sum + (lp.score ?? 0), 0) / total;
 
     let quizPassed = true;
     if (courseProjection?.requireQuizPass) {
@@ -429,11 +459,14 @@ export class ProgressService {
         courseTitle = course.title;
         recipientName = this.userClient.getDisplayName(profile);
       } catch (err) {
-        this.logger.warn(`Could not fetch course/user info for certificate event: ${(err as Error).message}`);
+        this.logger.warn(
+          `Could not fetch course/user info for certificate event: ${(err as Error).message}`,
+        );
       }
 
       this.messaging.publishEvent(EventTypes.ENROLLMENT_COMPLETED, {
         enrollmentId,
+        tenantId: enrollment.tenantId,
         courseId: enrollment.courseId,
         userId: enrollment.studentId,
         studentId: enrollment.studentId,
@@ -444,9 +477,9 @@ export class ProgressService {
     }
   }
 
-  async getProgress(enrollmentId: string, studentId: string) {
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { id: enrollmentId },
+  async getProgress(enrollmentId: string, studentId: string, tenantId = 'demo') {
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { id: enrollmentId, tenantId },
       include: {
         lessonProgresses: { orderBy: { createdAt: 'asc' } },
       },

@@ -1,6 +1,16 @@
 import {
-  Body, Controller, Delete, Get, HttpCode, HttpStatus,
-  Param, ParseUUIDPipe, Post, Query, UseGuards,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtPayload, UserRole } from '@lms/shared-types';
@@ -21,7 +31,10 @@ export class CertificateController {
   @ApiOperation({ summary: 'Publicly verify a certificate by QR code' })
   async verify(@Param('code') code: string) {
     const data = await this.service.verifyByCode(code);
-    return ApiResponseBuilder.success(data, data.valid ? 'Certificate is valid' : 'Certificate is revoked');
+    return ApiResponseBuilder.success(
+      data,
+      data.valid ? 'Certificate is valid' : 'Certificate is revoked',
+    );
   }
 
   // ── Protected routes ──────────────────────────────────────────────────────
@@ -31,8 +44,8 @@ export class CertificateController {
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.INSTRUCTOR)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Issue a new certificate (admin/instructor)' })
-  async issue(@Body() dto: CreateCertificateDto) {
-    const data = await this.service.issue(dto);
+  async issue(@Body() dto: CreateCertificateDto, @Headers('x-tenant-id') tenantId = 'demo') {
+    const data = await this.service.issue(dto, tenantId);
     return ApiResponseBuilder.success(data, 'Certificate issued successfully');
   }
 
@@ -40,8 +53,12 @@ export class CertificateController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: "List the current user's certificates" })
-  async findAll(@CurrentUser() user: JwtPayload, @Query() query: QueryCertificateDto) {
-    const data = await this.service.findAll(user.sub, query);
+  async findAll(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: QueryCertificateDto,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const data = await this.service.findAll(user.sub, query, tenantId);
     return ApiResponseBuilder.success(data);
   }
 
@@ -49,9 +66,13 @@ export class CertificateController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get a certificate by ID' })
-  async findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
     const isAdmin = [UserRole.ADMIN, UserRole.SUPER_ADMIN].includes(user.role as UserRole);
-    const data = await this.service.findOne(id, user.sub, isAdmin);
+    const data = await this.service.findOne(id, user.sub, isAdmin, tenantId);
     return ApiResponseBuilder.success(data);
   }
 
@@ -61,7 +82,10 @@ export class CertificateController {
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Revoke a certificate (admin only)' })
-  async revoke(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.service.revoke(id);
+  async revoke(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ): Promise<void> {
+    await this.service.revoke(id, tenantId);
   }
 }

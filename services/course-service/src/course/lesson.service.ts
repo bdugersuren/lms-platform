@@ -15,8 +15,14 @@ export class LessonService {
     private readonly courseEvents: CourseEventsPublisher,
   ) {}
 
-  async create(courseId: string, moduleId: string, dto: CreateLessonDto, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+  async create(
+    courseId: string,
+    moduleId: string,
+    dto: CreateLessonDto,
+    user: JwtPayload,
+    tenantId = 'demo',
+  ) {
+    const course = await this.prisma.course.findFirst({ where: { id: courseId, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
     this.assertOwnerOrAdmin(course.instructorId, user);
 
@@ -59,8 +65,10 @@ export class LessonService {
     return ApiResponseBuilder.success(lesson, 'Lesson created');
   }
 
-  async findByModule(courseId: string, moduleId: string) {
-    const module = await this.prisma.module.findFirst({ where: { id: moduleId, courseId } });
+  async findByModule(courseId: string, moduleId: string, tenantId = 'demo') {
+    const module = await this.prisma.module.findFirst({
+      where: { id: moduleId, courseId, course: { tenantId } },
+    });
     if (!module) throw new NotFoundException('Module not found');
 
     const lessons = await this.prisma.lesson.findMany({
@@ -82,8 +90,10 @@ export class LessonService {
     return ApiResponseBuilder.success(lessons, 'Lessons retrieved');
   }
 
-  async findOne(courseId: string, moduleId: string, lessonId: string) {
-    const module = await this.prisma.module.findFirst({ where: { id: moduleId, courseId } });
+  async findOne(courseId: string, moduleId: string, lessonId: string, tenantId = 'demo') {
+    const module = await this.prisma.module.findFirst({
+      where: { id: moduleId, courseId, course: { tenantId } },
+    });
     if (!module) throw new NotFoundException('Module not found');
 
     const lesson = await this.prisma.lesson.findFirst({
@@ -105,8 +115,15 @@ export class LessonService {
     return ApiResponseBuilder.success(lesson, 'Lesson retrieved');
   }
 
-  async update(courseId: string, moduleId: string, lessonId: string, dto: Partial<CreateLessonDto>, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+  async update(
+    courseId: string,
+    moduleId: string,
+    lessonId: string,
+    dto: Partial<CreateLessonDto>,
+    user: JwtPayload,
+    tenantId = 'demo',
+  ) {
+    const course = await this.prisma.course.findFirst({ where: { id: courseId, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
     this.assertOwnerOrAdmin(course.instructorId, user);
 
@@ -153,8 +170,14 @@ export class LessonService {
     return ApiResponseBuilder.success(updated, 'Lesson updated');
   }
 
-  async remove(courseId: string, moduleId: string, lessonId: string, user: JwtPayload) {
-    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+  async remove(
+    courseId: string,
+    moduleId: string,
+    lessonId: string,
+    user: JwtPayload,
+    tenantId = 'demo',
+  ) {
+    const course = await this.prisma.course.findFirst({ where: { id: courseId, tenantId } });
     if (!course) throw new NotFoundException('Course not found');
     this.assertOwnerOrAdmin(course.instructorId, user);
 
@@ -183,10 +206,7 @@ export class LessonService {
     return ApiResponseBuilder.success(null, 'Lesson deleted');
   }
 
-  async updateCourseTotals(
-    courseId: string,
-    db: PrismaExecutor = this.prisma,
-  ): Promise<void> {
+  async updateCourseTotals(courseId: string, db: PrismaExecutor = this.prisma): Promise<void> {
     const result = await db.lesson.aggregate({
       where: { module: { courseId } },
       _count: true,

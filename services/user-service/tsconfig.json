@@ -20,16 +20,26 @@
     }
   },
   "references": [
-    { "path": "../../packages/shared-types" },
-    { "path": "../../packages/shared-utils" },
-    { "path": "../../packages/shared-auth" },
-    { "path": "../../packages/shared-config" }
+    {
+      "path": "../../packages/shared-types"
+    },
+    {
+      "path": "../../packages/shared-utils"
+    },
+    {
+      "path": "../../packages/shared-auth"
+    },
+    {
+      "path": "../../packages/shared-config"
+    }
   ],
   "include": [
     "src/**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "**/*.spec.ts",
+    "**/*.e2e-spec.ts"
   ]
 }

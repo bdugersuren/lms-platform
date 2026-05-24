@@ -2,7 +2,7 @@
   "name": "@lms/enrollment-service",
   "version": "0.1.0",
   "private": true,
-  "description": "LMS Enrollment Service \u2014 enrollments, progress tracking, completion tracking",
+  "description": "LMS Enrollment Service — enrollments, progress tracking, completion tracking",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -21,7 +21,11 @@
     "reconcile": "ts-node -r tsconfig-paths/register scripts/reconcile.ts",
     "rebuild:projections": "ts-node -r tsconfig-paths/register scripts/rebuild-projections.ts",
     "rebuild:projections:dry": "DRY_RUN=true ts-node -r tsconfig-paths/register scripts/rebuild-projections.ts",
-    "validate:cutover": "ts-node -r tsconfig-paths/register scripts/validate-cutover.ts"
+    "validate:cutover": "ts-node -r tsconfig-paths/register scripts/validate-cutover.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "test:e2e": "jest --config jest-e2e.json"
   },
   "dependencies": {
     "@lms/shared-auth": "workspace:*",
@@ -53,14 +57,45 @@
     "winston": "catalog:"
   },
   "devDependencies": {
+    "@nestjs/testing": "^10.3.10",
     "@types/amqplib": "catalog:",
     "@types/express": "catalog:",
+    "@types/jest": "^29.5.12",
     "@types/node": "catalog:",
     "@types/passport-jwt": "catalog:",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.1.5",
     "ts-node": "catalog:",
     "tsconfig-paths": "catalog:",
     "typescript": "catalog:",
     "nodemon": "catalog:"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "coverageDirectory": "../coverage",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "@lms/shared-types": "<rootDir>/../../../packages/shared-types/src",
+      "@lms/shared-utils": "<rootDir>/../../../packages/shared-utils/src",
+      "@lms/shared-auth": "<rootDir>/../../../packages/shared-auth/src",
+      "@lms/shared-config": "<rootDir>/../../../packages/shared-config/src"
+    },
+    "globals": {
+      "ts-jest": {
+        "diagnostics": false
+      }
+    }
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

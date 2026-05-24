@@ -18,26 +18,25 @@ async function bootstrap(): Promise<void> {
   });
 
   const rabbitmqUrl = process.env.RABBITMQ_URL ?? 'amqp://localhost:5672';
-  const dlqArgs = { 'x-dead-letter-exchange': 'lms.dead-letter', 'x-dead-letter-routing-key': 'dead' };
 
-  // Consume from payment.publisher — where PaymentService's ClientProxy publishes via sendToQueue
+  // Consume from payment.publisher — declared by payment-service without DLX; must match.
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
       urls: [rabbitmqUrl],
       queue: 'payment.publisher',
-      queueOptions: { durable: true, arguments: dlqArgs },
+      queueOptions: { durable: true },
       noAck: false,
     },
   });
 
-  // Consume course-service content events for local progress projections.
+  // Consume course-service content events — declared by course-service without DLX; must match.
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
       urls: [rabbitmqUrl],
       queue: 'course.publisher',
-      queueOptions: { durable: true, arguments: dlqArgs },
+      queueOptions: { durable: true },
       noAck: false,
     },
   });

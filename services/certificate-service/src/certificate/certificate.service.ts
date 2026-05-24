@@ -18,12 +18,21 @@ export class CertificateService {
     private readonly generator: GeneratorService,
   ) {}
 
-  async issue(dto: CreateCertificateDto) {
-    const { userId, title, recipientName, courseId, description, issuerName, completedAt, expiresAt } = dto;
+  async issue(dto: CreateCertificateDto, tenantId = 'demo') {
+    const {
+      userId,
+      title,
+      recipientName,
+      courseId,
+      description,
+      issuerName,
+      completedAt,
+      expiresAt,
+    } = dto;
 
     if (courseId) {
       const existing = await this.prisma.certificate.findFirst({
-        where: { userId, courseId, status: CertificateStatus.ISSUED },
+        where: { tenantId, userId, courseId, status: CertificateStatus.ISSUED },
       });
       if (existing) return existing;
     }
@@ -32,6 +41,7 @@ export class CertificateService {
       const cert = await this.prisma.$transaction(async (tx) => {
         const created = await tx.certificate.create({
           data: {
+            tenantId,
             userId,
             courseId,
             title,
@@ -55,6 +65,7 @@ export class CertificateService {
           sequence: 1,
           payload: {
             certificateId: created.id,
+            tenantId: created.tenantId,
             userId,
             courseId,
             verifyCode: created.verifyCode,
@@ -77,9 +88,11 @@ export class CertificateService {
     } catch (err: unknown) {
       // Partial unique index violation: two concurrent events raced — return the winner
       if (this.isUniqueViolation(err) && courseId) {
-        this.logger.warn(`Duplicate cert race for userId=${userId} courseId=${courseId}, returning existing`);
+        this.logger.warn(
+          `Duplicate cert race for userId=${userId} courseId=${courseId}, returning existing`,
+        );
         const existing = await this.prisma.certificate.findFirst({
-          where: { userId, courseId, status: CertificateStatus.ISSUED },
+          where: { tenantId, userId, courseId, status: CertificateStatus.ISSUED },
         });
         if (existing) return existing;
       }
@@ -87,37 +100,43 @@ export class CertificateService {
     }
   }
 
-  async findAll(userId: string, query: QueryCertificateDto) {
+  async findAll(userId: string, query: QueryCertificateDto, tenantId = 'demo') {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
     const includeRevoked = query.includeRevoked === true;
 
-    const statusFilter = includeRevoked
-      ? undefined
-      : { status: CertificateStatus.ISSUED };
+    const statusFilter = includeRevoked ? undefined : { status: CertificateStatus.ISSUED };
 
     const where = {
       userId,
+      tenantId,
       ...statusFilter,
-      ...(query.search ? {
-        OR: [
-          { title: { contains: query.search, mode: 'insensitive' as const } },
-          { description: { contains: query.search, mode: 'insensitive' as const } },
-          { recipientName: { contains: query.search, mode: 'insensitive' as const } },
-        ],
-      } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { title: { contains: query.search, mode: 'insensitive' as const } },
+              { description: { contains: query.search, mode: 'insensitive' as const } },
+              { recipientName: { contains: query.search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
     };
 
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.certificate.findMany({ where, orderBy: { issuedAt: 'desc' }, take: limit, skip: offset }),
+      this.prisma.certificate.findMany({
+        where,
+        orderBy: { issuedAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
       this.prisma.certificate.count({ where }),
     ]);
 
     return { items, total, limit, offset };
   }
 
-  async findOne(id: string, requestingUserId: string, isAdmin = false) {
-    const cert = await this.prisma.certificate.findUnique({ where: { id } });
+  async findOne(id: string, requestingUserId: string, isAdmin = false, tenantId = 'demo') {
+    const cert = await this.prisma.certificate.findFirst({ where: { id, tenantId } });
     if (!cert) throw new NotFoundException('Certificate not found');
     // Revoked certificate-ийг owner болон admin харж болно
     if (cert.status === CertificateStatus.REVOKED && !isAdmin && cert.userId !== requestingUserId) {
@@ -136,8 +155,8 @@ export class CertificateService {
     };
   }
 
-  async revoke(id: string) {
-    const cert = await this.prisma.certificate.findUnique({ where: { id } });
+  async revoke(id: string, tenantId = 'demo') {
+    const cert = await this.prisma.certificate.findFirst({ where: { id, tenantId } });
     if (!cert) throw new NotFoundException('Certificate not found');
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -155,7 +174,7 @@ export class CertificateService {
         aggregateType: 'certificate',
         aggregateId: id,
         sequence: 1,
-        payload: { certificateId: id, userId: cert.userId },
+        payload: { certificateId: id, tenantId: cert.tenantId, userId: cert.userId },
       });
 
       return revoked;

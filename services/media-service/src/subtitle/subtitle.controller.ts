@@ -2,6 +2,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -13,7 +14,14 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtPayload } from '@lms/shared-types';
@@ -40,22 +48,29 @@ export class SubtitleController {
       },
     },
   })
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(
+    FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
   async upload(
     @CurrentUser() user: JwtPayload,
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() file: Express.Multer.File,
     @Query('language') language = 'en',
     @Query('label') label = 'English',
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.subtitleService.upload(user.sub, id, file, language, label);
+    const data = await this.subtitleService.upload(user.sub, id, file, language, label, tenantId);
     return ApiResponseBuilder.success(data, 'Subtitle uploaded');
   }
 
   @Get('files/:id/subtitles')
   @ApiOperation({ summary: 'List subtitles for a media file' })
-  async list(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
-    const data = await this.subtitleService.list(user.sub, id);
+  async list(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const data = await this.subtitleService.list(user.sub, id, tenantId);
     return ApiResponseBuilder.success(data);
   }
 
@@ -65,7 +80,8 @@ export class SubtitleController {
   async remove(
     @CurrentUser() user: JwtPayload,
     @Param('subtitleId', ParseUUIDPipe) subtitleId: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ): Promise<void> {
-    await this.subtitleService.remove(user.sub, subtitleId);
+    await this.subtitleService.remove(user.sub, subtitleId, tenantId);
   }
 }

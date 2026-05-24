@@ -18,14 +18,17 @@ export class EventListenerService {
   async onEnrollmentCompleted(@Payload() event: EnrollmentCompletedPayload): Promise<void> {
     this.logger.log(`Course completed: user=${event.userId} course=${event.courseId}`);
     try {
-      await this.certificates.issue({
-        userId: event.userId,
-        courseId: event.courseId,
-        title: 'Certificate of Completion',
-        recipientName: event.recipientName ?? 'Student',
-        description: event.courseTitle ?? undefined,
-        completedAt: event.completedAt ?? new Date().toISOString(),
-      });
+      await this.certificates.issue(
+        {
+          userId: event.userId,
+          courseId: event.courseId,
+          title: 'Certificate of Completion',
+          recipientName: event.recipientName ?? 'Student',
+          description: event.courseTitle ?? undefined,
+          completedAt: event.completedAt ?? new Date().toISOString(),
+        },
+        event.tenantId ?? 'demo',
+      );
     } catch (err) {
       this.logger.error(`Auto-issue failed for user ${event.userId}`, err);
       await this.eventFailure.record({

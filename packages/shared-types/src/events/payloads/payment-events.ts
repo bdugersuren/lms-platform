@@ -2,6 +2,7 @@ export type PaymentPurpose = 'COURSE_PURCHASE' | 'WALLET_TOPUP';
 
 export interface PaymentConfirmedPayload {
   paymentId: string;
+  tenantId?: string;
   userId: string;
   courseId?: string;
   walletOwnerId?: string;
@@ -13,6 +14,7 @@ export interface PaymentConfirmedPayload {
 
 export interface PaymentFailedPayload {
   paymentId: string;
+  tenantId?: string;
   userId: string;
   courseId?: string;
   amount: string;

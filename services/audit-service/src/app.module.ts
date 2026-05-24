@@ -5,6 +5,7 @@ import { appConfig, databaseConfig, jwtConfig } from '@lms/shared-config';
 import { PrismaService } from './prisma/prisma.service';
 import { AuditService } from './audit/audit.service';
 import { AuditController } from './audit/audit.controller';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { AuditController } from './audit/audit.controller';
       }),
       validationOptions: { allowUnknown: true, abortEarly: false },
     }),
+    AuthModule,
   ],
   controllers: [AuditController],
   providers: [PrismaService, AuditService],

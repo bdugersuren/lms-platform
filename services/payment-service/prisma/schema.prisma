@@ -34,6 +34,7 @@ enum PaymentStatus {
 
 model Payment {
   id            String          @id @default(uuid())
+  tenantId      String          @default("demo") @map("tenant_id")
   userId        String          @map("user_id")
   purpose       PaymentPurpose  @default(COURSE_PURCHASE)
   courseId      String?         @map("course_id")
@@ -65,6 +66,7 @@ model Payment {
   webhookLogs WebhookLog[]
 
   @@index([userId])
+  @@index([tenantId])
   @@index([courseId])
   @@index([purpose])
   @@index([status])

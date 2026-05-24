@@ -12,7 +12,11 @@ import type {
   CreateTopupDto,
 } from '@/types/wallet';
 
-interface ApiSuccess<T> { success: boolean; data: T; message?: string }
+interface ApiSuccess<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
 
 export function useMyWallet() {
   return useQuery<Wallet>({
@@ -96,7 +100,7 @@ export function useRequestPayout() {
 
 export function useDevTopup() {
   const qc = useQueryClient();
-  return useMutation<Transaction, Error, { amount: number; description?: string }>({
+  return useMutation<Transaction, Error, { amount: string; description?: string }>({
     mutationFn: async (dto) => {
       const { data } = await api.post<ApiSuccess<Transaction>>('/wallet/dev/topup', dto);
       return data.data;

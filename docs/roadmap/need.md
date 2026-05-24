@@ -1,269 +1,243 @@
 # Engineering Roadmap
 
+**Priority:** `High` = production blocker or data-loss risk · `Normal` = important, not blocking
+**Status:** `DONE` shipped & verified · `IN PROGRESS` actively worked · `TODO` queued
+
+Full per-section analysis: [`docs/roadmap/analysis.md`](analysis.md) — sections 1–15 map to ENG-001–ENG-015.
+
+---
+
+## Tracker
+
 | ID | Topic | Priority | Status | Notes |
 |---|---|---|---|---|
-| ENG-001 | Centralize service metadata and standardize microservice conventions | Normal | DONE | |
-| ENG-002 | services/user-service | Normal | DONE |  |
-| ENG-003 | Enrollment/progress хоёр газар давхар байна| Normal | DONE |   |
-| ENG-004 | Event contract-ууд scattered string literal| Normal | DONE |  Solution |
-| ENG-005 | Wallet, payment, банкны QR top-up | High | TODO |  Solution |
+| ENG-001 | Service metadata centralization | Normal | DONE | `config/services.yml`, generated docs pipeline |
+| ENG-002 | user-service: profile service | Normal | DONE | port 3014, `user_db`, auth.user.registered consumer |
+| ENG-003 | Enrollment/progress single source of truth | Normal | DONE | enrollment-service sole owner, CUTOVER flag |
+| ENG-004 | Event contracts + outbox pattern | Normal | DONE | `shared-types` EventTypes, outbox table per service |
+| ENG-005 | Wallet top-up, QPay, payment hardening | High | TODO | WALLET_TOPUP purpose, mock endpoint guard |
+| ENG-006 | Course → enrollment → certificate flow | High | TODO | completion event single emitter, recipient name |
+| ENG-007 | Frontend UX: role navigation, learning journey | Normal | TODO | student dashboard, lesson player, certificate page |
+| ENG-008 | Auth & security hardening | High | TODO | JWT secret validation, role guards, session limits |
+| ENG-009 | Gateway: API versioning, route consistency | Normal | TODO | prefix audit, swagger aggregation |
+| ENG-010 | Analytics, notification, audit logs | Normal | TODO | event consumers, admin dashboards |
+| ENG-011 | Media, AI guardrails, quiz/assignment integration | Normal | TODO | Ollama model guard, adaptive quiz |
+| ENG-012 | Multi-tenant data model | High | TODO | tenantId schema coverage across all services |
+| ENG-013 | DevOps: Docker profiles, build reliability | Normal | DONE | `dev-usecase.sh`, mem_limit tuned, `health-check.sh` |
+| ENG-014 | Testing strategy: unit, contract, E2E, smoke | Normal | DONE | 10 spec files + contract tests + smoke-test.sh |
+| ENG-015 | Documentation cleanup | Normal | DONE | ports fixed, API README updated, tracker expanded |
 
-ENG-001 Details
+---
 
-Problem:
+## ENG-001 — Service metadata centralization
 
-- Service configuration is distributed across docker-compose, env files, and service code.
-- Naming conventions exist implicitly but are not formally defined.
-- Ports, URLs, profiles, and service identities are difficult to manage centrally.
-- Documentation generation cannot reliably derive architecture metadata.
+Analysis: `analysis.md` § 1
 
-Goal:
+**Problem:** Service configuration was distributed across docker-compose, env files, and service code. Naming conventions existed implicitly but were not formally defined.
 
-Create a centralized service metadata system.
+**Deliverables shipped:**
+- `config/services.yml` — centralized service registry
+- `docs/generated/current-architecture.md` — auto-generated from services.yml + docker-compose
+- `scripts/generate-docs.js`, `verify-services.js`, `verify-docs.js`
+- Service matrix documentation with port, profile, database, dependency graph
 
-Requirements:
+---
 
-- Create config/services.yml
-- Define:
-    - service name
-    - container name
-    - internal port
-    - compose profile
-    - dependencies
-    - environment naming convention
-- Ensure all services follow deterministic naming patterns.
-- Generate documentation from centralized metadata.
-- Reduce duplicated configuration.
-- Preserve current runtime behavior.
+## ENG-002 — user-service
 
-Architecture Rules:
+Analysis: `analysis.md` § 2
 
-- Service ports must remain stable.
-- Internal Docker DNS names must remain backward compatible.
-- Generated docs must reflect actual runtime topology.
-- New services must be addable from one place.
+**Problem:** `user-service` was referenced in gateway routes and docs but did not exist. Certificate service fell back to `'Student'` for recipient name. Auth service had no profile data beyond email/role.
 
-Deliverables:
+**Deliverables shipped:**
+- `services/user-service/` — port 3014, `user_db`
+- `UserProfile` schema (displayName, avatar, bio, locale, timezone)
+- `auth.user.registered` consumer auto-creates profile
+- REST endpoints: `GET /users/me`, `PATCH /users/me`, `GET /users/:id`
+- Unit tests: `user.service.spec.ts`, `event-listener.service.spec.ts`
 
-- config/services.yml
-- docs/generated/current-architecture.md
-- service matrix documentation
-- dependency graph generation
-- docs verification tooling
+---
 
-Success Criteria:
+## ENG-003 — Enrollment/progress single source of truth
 
-- Every service has a single authoritative metadata definition.
-- Adding a new service requires updating only one metadata source.
-- Generated documentation matches runtime configuration exactly.
+Analysis: `analysis.md` § 3
 
+**Problem:** `course-service` and `enrollment-service` both had `CourseEnrollment` and `LessonProgress` models, causing potential divergence in progress state, certificate triggers, and revenue distribution.
 
+**Deliverables shipped:**
+- `enrollment-service` is the sole owner of enrollment and progress state
+- `ENROLLMENT_CUTOVER_ENABLED` flag disables course-service writes
+- Gateway smart routing added
+- course-service enrollment endpoints marked deprecated
 
+---
 
-ENG-002 Details
+## ENG-004 — Event contracts + outbox pattern
 
-`user-service` байхгүй боловч docs/gateway дээр байгаа
+Analysis: `analysis.md` § 4
 
-Одоогийн repo-д `services/user-service` байхгүй. Гэвч:
+**Problem:** Event names were scattered string literals across services. No outbox pattern meant events could be lost if RabbitMQ publish failed after DB commit.
 
-- `docs/architecture/README.md`, `docs/developer-guide/README.md` дээр `user-service` гэж тусдаа service байдлаар тайлбарласан.
-- `gateway/src/proxy/services.config.ts` дээр `users: process.env.USER_SERVICE_URL` route байна.
-- Auth service-ийн `User` model нь email, role, MFA-тэй боловч profile/full name/avatar/organization preference гэх мэт LMS хэрэглэгчийн profile байхгүй.
+**Deliverables shipped:**
+- `packages/shared-types/src/events/event-types.ts` — `EventTypes` const object
+- Typed payload interfaces per event in `packages/shared-types/src/events/payloads/`
+- `outbox_events` table + `OutboxService` in: auth, enrollment, wallet, payment, certificate services
+- Dead-letter queue config in `infra/rabbitmq/definitions.json`
 
-Сайжруулах санал:
+---
 
-- шийдвэр гаргах:
-  - `user-service`-ийг үнэхээр үүсгэж, profile, organization, tenant membership, student/instructor profile, displayName, avatar, locale, bio хадгалдаг болгох.
-  
-- Certificate service одоо `recipientName ?? 'Student'` гэж fallback хийдэг. Profile service байхгүйгээс сертификат дээр сурагчийн жинхэнэ нэр гарахгүй. Иймээс profile read model  хэрэгтэй.
+## ENG-005 — Wallet top-up, QPay, payment hardening
 
+Analysis: `analysis.md` § 5
 
+**Problem:** No production wallet top-up flow. Payment ownership checks missing. Mock/dev endpoints exposed in production. Transaction type granularity insufficient.
 
+**Key deliverables (TODO):**
+- `PaymentPurpose` enum: `COURSE_PURCHASE` / `WALLET_TOPUP`
+- `courseId` optional for top-up; `walletOwnerId` for credit target
+- Frontend wallet page: preset amounts, QPay/SocialPay QR modal
+- `payment.confirmed` → wallet credit when `purpose === WALLET_TOPUP`
+- Mock endpoint guarded by `NODE_ENV !== 'production'`
+- Granular `TransactionType`: `WALLET_TOPUP`, `COURSE_PURCHASE`, `REFUND`, `ADMIN_ADJUSTMENT`
 
+---
 
-ENG-003 Enrollment/progress хоёр газар давхар байна
+## ENG-006 — Course → enrollment → certificate flow reliability
 
-Одоогийн бүтэц:
+Analysis: `analysis.md` § 6
 
-course-service/prisma/schema.prisma: CourseEnrollment, LessonProgress, interactive progress models.
-enrollment-service/prisma/schema.prisma: Enrollment, LessonProgress.
-Frontend-ийн use-enrollment.ts нь /enrollments/* буюу enrollment-service-ийг ашиглаж байна.
-course-service/src/enrollment болон course-service/src/progress бас enrollment/progress endpoint-тэй.
-Энэ нь дараах асуудлыг үүсгэнэ:
+**Problem:** Certificate generation depends on `enrollment.completed` but the emitter was ambiguous when course-service also had enrollment logic. Recipient name falls back to `'Student'` when user-service is unavailable. No idempotency guard on `(userId, courseId)` certificate pair.
 
-Нэг сурагчийн progress хоёр database-д өөр өөр болж болно.
-Certificate generation аль event-ийг сонсох нь тодорхойгүй болно.
-Wallet revenue distribution аль enrollment ID-г ашиглах нь зөрж болно.
-Course content delete/update хийхэд enrollment-service-ийн progress sync алдагдана.
-Сайжруулах санал:
+**Key deliverables (TODO):**
+- Single completion event emitter: enrollment-service only
+- `certificate.findFirst({ userId, courseId, status: ISSUED })` idempotency (partially done)
+- Recipient name fetched from user-service profile at issue time
+- Completion policy gates: `requireQuizPass`, `requireAssignmentPass`, `minimumScorePercent`
 
-Enrollment/progress-ийн single source of truth-ийг enrollment-service болгох.
-course-service-ээс CourseEnrollment, LessonProgress-ийг legacy гэж тэмдэглэж, endpoint-үүдийг deprecate хийх эсвэл зөвхөн course content owner байлгах.
-Course content өөрчлөгдөхөд course.lesson.created, course.lesson.deleted, course.lesson.reordered, course.published event гаргаж enrollment-service өөрийн lesson progress projection-ийг sync хийдэг болгох.
-Interactive block answer/progress course-service-д үлдэх үү, enrollment-service-д шилжих үү гэдгийг тодорхойлох. Learning progress-тэй шууд холбоотой тул enrollment-service-д ойртуулах нь илүү 
+---
 
+## ENG-007 — Frontend UX: role navigation, learning journey
 
+Analysis: `analysis.md` § 7
 
+**Problem:** Student dashboard lacks a lesson player, progress bar, and certificate download. Role-based navigation is inconsistent. No onboarding flow for new users.
 
-ENG-004 4. Event contract-ууд scattered string literal байна
+**Key deliverables (TODO):**
+- Student dashboard: enrolled courses with progress ring
+- Lesson player: video + interactive blocks + quiz embed
+- Certificate page with QR verification
+- Instructor dashboard: course builder, submission grading
+- Role-aware sidebar navigation
+- Onboarding wizard (profile completion %)
 
-Event name-үүд service бүрт string literal байдлаар байна:
+---
 
-- `payment.confirmed`
-- `enrollment.created`
-- `enrollment.completed`
-- `lesson.completed`
-- `certificate.issued`
-- `assignment.submission.graded`
-- `quiz.attempt.submitted`
+## ENG-008 — Auth & security hardening
 
-Зарим shared type (`packages/shared-types/src/events`) байгаа ч бүх service ашиглахгүй байна.
+Analysis: `analysis.md` § 8
 
-Сайжруулах санал:
+**Problem:** JWT secrets have no minimum entropy check at startup. Session concurrency limits not enforced. Role guard inconsistency across services (some use `RolesGuard`, some inline checks).
 
-- `packages/shared-types/src/events` дотор бүх event-ийн canonical contract-ийг version-тэй тодорхойлох.
-- Жишээ:
+**Key deliverables (TODO):**
+- `JWT_SECRET` / `JWT_REFRESH_SECRET` minimum 32-char validation in Joi schema (partially done)
+- `@Roles()` + `RolesGuard` standardized from `shared-auth` across all services
+- Max concurrent sessions per user (configurable, default 5)
+- Refresh token family tracking to detect reuse attacks
 
-```ts
-type EventEnvelope<T> = {
-  id: string;
-  type: string;
-  version: 1;
-  occurredAt: string;
-  producer: string;
-  correlationId?: string;
-  causationId?: string;
-  data: T;
-};
-```
+---
 
-- Producer/consumer бүр энэ envelope-ийг ашиглах.
-- `zod` эсвэл `class-validator`-аар consumer талд event payload validate хийх.
+## ENG-009 — Gateway: API versioning, route consistency
 
-### 4.2 Outbox pattern байхгүй
+Analysis: `analysis.md` § 9
 
-Одоогоор business DB update хийгээд дараа нь `this.client.emit(...)` хийдэг. Жишээ:
+**Problem:** Service routes registered in gateway use inconsistent prefixes. No version prefix (`/v1/`) enforced. Swagger aggregation at gateway level covers auth only.
 
-- Payment completed -> `payment.confirmed`
-- Enrollment created -> `enrollment.created`
-- Certificate issued -> `certificate.issued`
+**Key deliverables (TODO):**
+- Audit all proxy routes in `gateway/src/proxy/`
+- Standardize prefix: `/api/{service}/{resource}`
+- URI versioning: `/api/v1/auth/login`
+- Gateway-level Swagger aggregation (merge per-service specs)
 
-DB commit амжилттай боловч RabbitMQ publish fail бол event алдагдана.
+---
 
-Сайжруулах санал:
+## ENG-010 — Analytics, notification, audit logs
 
-- Service бүрт `outbox_events` table нэмэх.
-- Business transaction дотор event-ийг outbox-д бичих.
-- Background publisher outbox-оос RabbitMQ руу publish хийгээд `publishedAt` тэмдэглэх.
-- Consumer бүр idempotency table (`processed_events`) ашиглах.
+Analysis: `analysis.md` § 10
 
-### 4.3 Dead-letter queue, retry policy, observability сул
+**Problem:** `analytics-service` and `audit-service` exist but have minimal event consumers. Notification templates are hard-coded. No admin UI for viewing analytics or replaying failed events.
 
-Consumer талд олон газар error swallow хийж message ack болгож байна. Жишээ:
+**Key deliverables (TODO):**
+- Analytics consumers: `enrollment.completed`, `payment.confirmed`, `quiz.attempt.submitted`
+- Notification templates for: enrollment confirmation, certificate issued, payment receipt
+- Audit consumer for all admin actions
+- Admin dashboard: KPI widgets, failed event replay
 
-- enrollment-service payment confirmed auto-enroll fail болсон ч ack.
-- wallet-service revenue distribution fail болсон ч ack.
+---
 
-Энэ нь infinite retry-ээс хамгаалж байгаа боловч бизнес event алдагдана.
+## ENG-011 — Media, AI guardrails, quiz/assignment integration
 
-Сайжруулах санал:
+Analysis: `analysis.md` § 11
 
-- Retryable/non-retryable error ялгах.
-- DLQ queue үүсгэх: `lms.events.dlq`.
-- `event_failures` table дээр failed event payload, error, retry count хадгалах.
-- Admin UI дээр failed event replay хийх боломж өгөх.
+**Problem:** Media transcoding job status not surfaced to frontend. Ollama model not validated at startup. Quiz attempts not linked to enrollment progress gates.
 
-### 4.4 Synchronous service calls fallback strategy хэрэгтэй
+**Key deliverables (TODO):**
+- Media upload progress polling via `media.transcode.completed` event
+- Ollama model health check at ai-service startup
+- Quiz `passed` field consumed by enrollment completion calculator
+- Assignment grade consumed by enrollment completion calculator
 
-Enrollment service course-service-аас course basic/module lesson data HTTP-р татдаг. Wallet service revenue distribution хийхдээ course-service рүү HTTP-р price/instructorId татдаг.
+---
 
-Эрсдэл:
+## ENG-012 — Multi-tenant data model
 
-- Course service түр down бол enrollment/payment downstream тасарна.
-- Retry хийгдэхгүй бол revenue эсвэл enrollment алдагдана.
+Analysis: `analysis.md` § 12
 
-Сайжруулах санал:
+**Problem:** `tenantId` is present in auth/enrollment but missing or defaulted to `'demo'` in quiz, assignment, wallet, payment, media, notification schemas.
 
-- Read model projection ашиглах: `course.published/course.updated` event-ээр enrollment/wallet service-д course snapshot хадгалах.
-- Synchronous call-ийг зөвхөн fallback эсвэл admin repair task болгох.
-- Timeout, retry, circuit breaker (`@nestjs/axios` + retry/backoff) стандартчилах.
+**Key deliverables (TODO):**
+- Add `tenantId String @default("demo")` to all service schemas missing it
+- Prisma migrations for each affected service
+- Gateway header `x-tenant-id` forwarding verified end-to-end
+- Tenant isolation tests
 
+---
 
-ENG-005 Wallet, payment, банкны QR top-up
+## ENG-013 — DevOps: Docker profiles, build reliability, resource limits
 
-## 5. Wallet, payment, банкны QR top-up
+Analysis: `analysis.md` § 13
 
-### 5.1 Wallet top-up production workflow байхгүй
+**Problem:** No use-case launcher script. BuildKit cache mounts inconsistent. Memory limits not set on most services causing OOM kills. No container health diagnostic tool.
 
-Frontend `web/src/app/wallet/page.tsx` дээр зөвхөн development top-up panel байна. Backend `wallet-service` дээр `POST /wallet/dev/topup` production дээр хаагддаг. Payment service-ийн `CreatePaymentDto` заавал `courseId` авдаг тул wallet цэнэглэх төлбөр үүсгэх боломжгүй.
+**Deliverables shipped:**
+- `scripts/dev-usecase.sh` — 5 use-case profiles (learner-core, paid-course, full-learning, etc.)
+- `scripts/health-check.sh` — container health diagnostic with `--watch` mode
+- `docker-compose.yml` memory limits tuned: NestJS services 256 MB, heavy services 384 MB
+- `mem_reservation` added to all services
 
-Сурагчийн хүссэн workflow:
+---
 
-1. Сурагч `Хэтэвч цэнэглэх` дарна.
-2. Дүн сонгоно эсвэл оруулна.
-3. Банкны QR/QPay invoice үүснэ.
-4. Сурагч банкны апп-аар QR уншуулж төлнө.
-5. Payment provider webhook/check амжилттай бол wallet balance нэмэгдэнэ.
-6. Transaction history дээр `CREDIT` буюу `WALLET_TOPUP` гэж харагдана.
+## ENG-014 — Testing strategy: unit, contract, E2E, smoke
 
-Сайжруулах санал:
+Analysis: `analysis.md` § 14
 
-- Payment schema дээр `purpose` нэмэх:
+**Problem:** Only 5 test files existed across 20+ services. No contract tests for event payloads. No E2E tests. No smoke test script.
 
-```prisma
-enum PaymentPurpose {
-  COURSE_PURCHASE
-  WALLET_TOPUP
-}
+**Deliverables shipped:**
+- `scripts/smoke-test.sh` — curl-based health + auth flow validation
+- Jest infrastructure added to: auth, enrollment, wallet, payment, certificate services
+- Unit tests: `auth.service.spec.ts`, `token.service.spec.ts`, `wallet.service.spec.ts`, `payment.service.spec.ts`, `certificate.service.spec.ts`, `progress.service.spec.ts`
+- Contract tests: `packages/shared-types/src/events/__tests__/payloads.contract.spec.ts`
+- E2E tests: `auth-service/test/auth.e2e-spec.ts`, `enrollment-service/test/enrollment.e2e-spec.ts`
 
-model Payment {
-  purpose PaymentPurpose @default(COURSE_PURCHASE)
-  courseId String?
-  walletOwnerId String?
-}
-```
+---
 
-- `CreatePaymentDto`-г хоёр төрөлтэй болгох:
-  - `COURSE_PURCHASE`: `courseId` required.
-  - `WALLET_TOPUP`: `amount` required, `courseId` байхгүй.
-- Payment confirmed event-д `purpose` дамжуулах.
-- Wallet service `payment.confirmed` сонсоод `purpose === WALLET_TOPUP` үед `walletService.credit(userId, amount, 'Хэтэвч цэнэглэлт', 'CREDIT', paymentId)` хийх.
-- Enrollment service зөвхөн `purpose === COURSE_PURCHASE` үед auto-enroll хийх.
-- Frontend wallet page дээр:
-  - `Цэнэглэх` primary CTA.
-  - Preset amounts: 10k, 50k, 100k, 500k.
-  - Provider сонголт: QPay, SocialPay.
-  - QR image/deeplink modal.
-  - `Төлбөр шалгах` polling эсвэл manual check.
-  - Completed үед wallet query invalidate.
+## ENG-015 — Documentation cleanup
 
-### 5.2 Payment ownership шалгалт дутуу
+Analysis: `analysis.md` § 15
 
-`PaymentController.findOne` болон `checkPayment` нь authenticated user-аас id авдаг боловч payment owner эсэхийг шалгахгүй байна. Нэг хэрэглэгч бусдын payment UUID мэдвэл төлбөрийн мэдээлэл харах эсвэл status check trigger хийх боломжтой.
+**Problem:** `docs/developer-guide/README.md` had stale port numbers (3002/3004/3005 swapped, tenant-service and audit-service missing). `docs/api/README.md` claimed full service coverage but was auth-only. `docs/roadmap/need.md` tracked only 5 of 15 engineering items.
 
-Сайжруулах санал:
-
-- `findById(id, user)` болгож owner/admin шалгах.
-- `checkPayment(id, user)` дээр мөн адил.
-- Admin list endpoint тусдаа role guard-тэй байх.
-
-### 5.3 Mock/dev endpoints production hardening
-
-`POST /webhooks/mock-pay/:paymentId` нь guard-гүй байна. Энэ нь mock provider payment-ийг шууд complete хийх боломжтой. `simulate` guard-тэй боловч role эсвэл NODE_ENV шалгалт тод харагдахгүй.
-
-Сайжруулах санал:
-
-- `mock-pay`, `simulate` endpoint-үүдийг `NODE_ENV !== 'production'` үед л module-д бүртгэх эсвэл guard дотор production дээр 404/403 буцаах.
-- Admin/dev role guard нэмэх.
-- Public webhook endpoint дээр provider signature validation хийх.
-- Webhook replay/idempotency key ашиглах.
-
-### 5.4 Wallet transaction type нарийвчлал
-
-`TransactionType.CREDIT` бүх орлогыг төлөөлж байна. Wallet top-up, refund, admin adjustment, revenue share ялгарах хэрэгтэй.
-
-Сайжруулах санал:
-
-- `WALLET_TOPUP`, `ADMIN_ADJUSTMENT`, `COURSE_PURCHASE`, `REFUND` зэрэг type нэмэх.
-- `reference` unique optional index нэмэх: нэг paymentId-ээр давхар credit хийхгүй.
-- Transaction metadata-д provider, invoiceId, paymentId хадгалах.
+**Deliverables shipped:**
+- `docs/developer-guide/README.md`: 16-service inventory table, corrected ports, ENV block, DB count 13→15, ASCII diagram
+- `docs/api/README.md`: scope note (auth-only), per-service Swagger URL table, correct gateway Swagger URL
+- `docs/roadmap/need.md`: expanded 5→15 rows, priority/status legend, prose blocks for all items

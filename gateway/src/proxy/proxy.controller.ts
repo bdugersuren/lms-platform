@@ -14,13 +14,17 @@ import { lastValueFrom } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
 import * as qs from 'qs';
 import { SERVICE_ROUTES } from './services.config';
+import { TenantResolverService } from '../tenant/tenant-resolver.service';
 
 @ApiExcludeController()
 @Controller(':service')
 export class ProxyController {
   private readonly logger = new Logger(ProxyController.name);
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly tenantResolver: TenantResolverService,
+  ) {}
 
   @All()
   proxyBase(
@@ -48,10 +52,12 @@ export class ProxyController {
     const queryString = qs.stringify(req.query, { encode: false, arrayFormat: 'repeat' });
     const url = queryString ? `${targetUrl}?${queryString}` : targetUrl;
 
+    const tenantHeaders = await this.tenantResolver.buildForwardHeaders(req);
     const forwardHeaders: Record<string, string> = {
       'content-type': (req.headers['content-type'] as string) ?? 'application/json',
       'x-correlation-id': (req.headers['x-correlation-id'] as string) ?? '',
       'x-forwarded-for': req.ip ?? '',
+      ...tenantHeaders,
     };
 
     if (req.headers['authorization']) {
@@ -61,8 +67,8 @@ export class ProxyController {
     // Forward decoded user context set by JWT guard upstream
     if (req.headers['x-user-id']) {
       forwardHeaders['x-user-id'] = req.headers['x-user-id'] as string;
-      forwardHeaders['x-user-role'] = req.headers['x-user-role'] as string ?? '';
-      forwardHeaders['x-user-email'] = req.headers['x-user-email'] as string ?? '';
+      forwardHeaders['x-user-role'] = (req.headers['x-user-role'] as string) ?? '';
+      forwardHeaders['x-user-email'] = (req.headers['x-user-email'] as string) ?? '';
     }
 
     const config: AxiosRequestConfig = {

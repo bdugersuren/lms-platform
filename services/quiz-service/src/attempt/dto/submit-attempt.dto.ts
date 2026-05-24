@@ -4,7 +4,7 @@ import { Type } from 'class-transformer';
 
 export class AnswerDto {
   @ApiProperty({ description: 'Question ID' })
-  @IsUUID()
+  @IsString()
   questionId!: string;
 
   @ApiPropertyOptional({ type: [String], description: 'Selected option IDs (for choice-based questions)' })

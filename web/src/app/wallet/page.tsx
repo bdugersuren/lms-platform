@@ -21,21 +21,21 @@ import type { TransactionType, PayoutStatus, Payment, PaymentProvider } from '@/
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 const TXMeta: Record<TransactionType, { icon: string; label: string; sign: '+' | '-' }> = {
-  CREDIT:           { icon: '💰', label: 'Орлого',           sign: '+' },
-  WALLET_TOPUP:     { icon: '⚡', label: 'Хэтэвч цэнэглэлт', sign: '+' },
-  REVENUE_SHARE:    { icon: '📊', label: 'Орлогын хувь',     sign: '+' },
-  REFUND:           { icon: '↩️', label: 'Буцаалт',          sign: '+' },
-  ADMIN_ADJUSTMENT: { icon: '🔧', label: 'Тохируулга',        sign: '+' },
-  DEBIT:            { icon: '💸', label: 'Зарцуулалт',       sign: '-' },
-  PAYOUT:           { icon: '🏦', label: 'Гадагш гаргалт',   sign: '-' },
-  PLATFORM_FEE:     { icon: '🏛️', label: 'Платформ хураамж',  sign: '-' },
+  CREDIT: { icon: '💰', label: 'Орлого', sign: '+' },
+  WALLET_TOPUP: { icon: '⚡', label: 'Хэтэвч цэнэглэлт', sign: '+' },
+  REVENUE_SHARE: { icon: '📊', label: 'Орлогын хувь', sign: '+' },
+  REFUND: { icon: '↩️', label: 'Буцаалт', sign: '+' },
+  ADMIN_ADJUSTMENT: { icon: '🔧', label: 'Тохируулга', sign: '+' },
+  DEBIT: { icon: '💸', label: 'Зарцуулалт', sign: '-' },
+  PAYOUT: { icon: '🏦', label: 'Гадагш гаргалт', sign: '-' },
+  PLATFORM_FEE: { icon: '🏛️', label: 'Платформ хураамж', sign: '-' },
 };
 
 const PayoutMeta: Record<PayoutStatus, { label: string; cls: string }> = {
-  PENDING:    { label: 'Хүлээгдэж байна', cls: 'bg-yellow-100 text-yellow-700' },
+  PENDING: { label: 'Хүлээгдэж байна', cls: 'bg-yellow-100 text-yellow-700' },
   PROCESSING: { label: 'Боловсруулж байна', cls: 'bg-blue-100 text-blue-700' },
-  COMPLETED:  { label: 'Гүйцэтгэсэн', cls: 'bg-green-100 text-green-700' },
-  REJECTED:   { label: 'Татгалзсан', cls: 'bg-red-100 text-red-700' },
+  COMPLETED: { label: 'Гүйцэтгэсэн', cls: 'bg-green-100 text-green-700' },
+  REJECTED: { label: 'Татгалзсан', cls: 'bg-red-100 text-red-700' },
 };
 
 function fmt(amount: string | number) {
@@ -84,7 +84,7 @@ export default function WalletPage() {
     }
     setTopupMsg('');
     createTopup.mutate(
-      { purpose: 'WALLET_TOPUP', amount: Number(topupAmount), provider: topupProvider },
+      { purpose: 'WALLET_TOPUP', amount: String(topupAmount), provider: topupProvider },
       {
         onSuccess: (payment) => {
           setActivePayment(payment);
@@ -128,7 +128,7 @@ export default function WalletPage() {
   const handleDevTopup = (amount: number) => {
     setDevMsg('');
     devTopup.mutate(
-      { amount, description: `Dev топ-ап +₮${amount.toLocaleString('mn-MN')}` },
+      { amount: String(amount), description: `Dev топ-ап +₮${amount.toLocaleString('mn-MN')}` },
       {
         onSuccess: (tx) => setDevMsg(`✓ ₮${Number(tx.amount).toLocaleString('mn-MN')} нэмэгдлээ`),
         onError: (err) => setDevMsg(`✗ ${err.message}`),
@@ -147,7 +147,7 @@ export default function WalletPage() {
   const handlePayout = async (e: React.FormEvent) => {
     e.preventDefault();
     await requestPayout.mutateAsync({
-      amount: Number(payoutForm.amount),
+      amount: String(payoutForm.amount),
       bankName: payoutForm.bankName || undefined,
       accountNumber: payoutForm.accountNumber || undefined,
       accountName: payoutForm.accountName || undefined,
@@ -166,7 +166,12 @@ export default function WalletPage() {
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
             </Link>
             <span className="text-xl">💳</span>
@@ -205,16 +210,18 @@ export default function WalletPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-indigo-200 text-sm mb-1">Нийт үлдэгдэл</p>
-                  <p className="text-4xl font-bold tracking-tight">
-                    ₮{fmt(wallet.balance)}
-                  </p>
+                  <p className="text-4xl font-bold tracking-tight">₮{fmt(wallet.balance)}</p>
                   <p className="text-indigo-300 text-sm mt-1">{wallet.currency}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className={clsx(
-                    'px-2.5 py-0.5 rounded-full text-xs font-medium',
-                    wallet.status === 'ACTIVE' ? 'bg-green-400/20 text-green-200' : 'bg-red-400/20 text-red-200',
-                  )}>
+                  <span
+                    className={clsx(
+                      'px-2.5 py-0.5 rounded-full text-xs font-medium',
+                      wallet.status === 'ACTIVE'
+                        ? 'bg-green-400/20 text-green-200'
+                        : 'bg-red-400/20 text-red-200',
+                    )}
+                  >
                     {wallet.status === 'ACTIVE' ? '● Идэвхтэй' : wallet.status}
                   </span>
                   {wallet.status === 'ACTIVE' && (
@@ -226,7 +233,10 @@ export default function WalletPage() {
                         ⚡ Цэнэглэх
                       </button>
                       <button
-                        onClick={() => { setShowPayoutForm(true); setTab('payouts'); }}
+                        onClick={() => {
+                          setShowPayoutForm(true);
+                          setTab('payouts');
+                        }}
                         className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium transition-colors border border-white/20"
                       >
                         Мөнгө гаргах
@@ -261,12 +271,14 @@ export default function WalletPage() {
 
             {/* Tabs */}
             <div className="flex gap-1 bg-white rounded-xl border border-gray-100 shadow-sm p-1">
-              {([
-                ['overview', '📊', 'Хураангуй'],
-                ['transactions', '📋', 'Гүйлгээ'],
-                ['revenue', '💹', 'Орлого'],
-                ['payouts', '🏦', 'Гаргалт'],
-              ] as [Tab, string, string][]).map(([id, icon, label]) => (
+              {(
+                [
+                  ['overview', '📊', 'Хураангуй'],
+                  ['transactions', '📋', 'Гүйлгээ'],
+                  ['revenue', '💹', 'Орлого'],
+                  ['payouts', '🏦', 'Гаргалт'],
+                ] as [Tab, string, string][]
+              ).map(([id, icon, label]) => (
                 <button
                   key={id}
                   onClick={() => setTab(id)}
@@ -293,7 +305,14 @@ export default function WalletPage() {
                 setTxPage={setTxPage}
               />
             )}
-            {tab === 'revenue' && <RevenueTab revSummary={revSummary} revHistory={revHistory} revPage={revPage} setRevPage={setRevPage} />}
+            {tab === 'revenue' && (
+              <RevenueTab
+                revSummary={revSummary}
+                revHistory={revHistory}
+                revPage={revPage}
+                setRevPage={setRevPage}
+              />
+            )}
             {tab === 'payouts' && (
               <PayoutsTab
                 payoutData={payoutData}
@@ -313,7 +332,9 @@ export default function WalletPage() {
             {showTopupModal && (
               <div
                 className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-                onClick={(e) => { if (e.target === e.currentTarget) closeTopupModal(); }}
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) closeTopupModal();
+                }}
               >
                 <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5">
                   <div className="flex items-center justify-between">
@@ -321,7 +342,9 @@ export default function WalletPage() {
                     <button
                       onClick={closeTopupModal}
                       className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-                    >×</button>
+                    >
+                      ×
+                    </button>
                   </div>
 
                   {!activePayment ? (
@@ -349,12 +372,16 @@ export default function WalletPage() {
 
                       {/* Custom amount */}
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Дурын дүн (₮)</label>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Дурын дүн (₮)
+                        </label>
                         <input
                           type="number"
                           min={1000}
                           value={topupAmount}
-                          onChange={(e) => setTopupAmount(e.target.value ? Number(e.target.value) : '')}
+                          onChange={(e) =>
+                            setTopupAmount(e.target.value ? Number(e.target.value) : '')
+                          }
                           placeholder="50000"
                           className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         />
@@ -388,7 +415,9 @@ export default function WalletPage() {
                         disabled={!topupAmount || createTopup.isPending}
                         className="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
                       >
-                        {createTopup.isPending ? 'Үүсгэж байна...' : `₮${Number(topupAmount || 0).toLocaleString('mn-MN')} цэнэглэх`}
+                        {createTopup.isPending
+                          ? 'Үүсгэж байна...'
+                          : `₮${Number(topupAmount || 0).toLocaleString('mn-MN')} цэнэглэх`}
                       </button>
                     </>
                   ) : (
@@ -398,15 +427,21 @@ export default function WalletPage() {
                         <div className="text-center py-6">
                           <p className="text-4xl mb-3">✅</p>
                           <p className="font-semibold text-gray-900">Амжилттай цэнэглэгдлээ!</p>
-                          <p className="text-sm text-gray-500 mt-1">+₮{fmt(activePayment.amount)}</p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            +₮{fmt(activePayment.amount)}
+                          </p>
                         </div>
-                      ) : activePayment.status === 'FAILED' || activePayment.status === 'CANCELLED' ? (
+                      ) : activePayment.status === 'FAILED' ||
+                        activePayment.status === 'CANCELLED' ? (
                         <div className="text-center py-6 space-y-3">
                           <p className="text-4xl">❌</p>
                           <p className="font-semibold text-gray-900">Төлбөр амжилтгүй болсон</p>
                           <p className="text-sm text-gray-500">Дахин оролдоно уу.</p>
                           <button
-                            onClick={() => { setActivePayment(null); setTopupMsg(''); }}
+                            onClick={() => {
+                              setActivePayment(null);
+                              setTopupMsg('');
+                            }}
                             className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-colors"
                           >
                             Дахин оролдох
@@ -416,12 +451,22 @@ export default function WalletPage() {
                         <>
                           <div className="text-center space-y-3">
                             <p className="text-sm text-gray-600">
-                              <span className="font-semibold text-gray-900">₮{fmt(activePayment.amount)}</span> — {activePayment.provider === 'QPAY' ? 'QPay QR уншуулна уу' : 'SocialPay дарна уу'}
+                              <span className="font-semibold text-gray-900">
+                                ₮{fmt(activePayment.amount)}
+                              </span>{' '}
+                              —{' '}
+                              {activePayment.provider === 'QPAY'
+                                ? 'QPay QR уншуулна уу'
+                                : 'SocialPay дарна уу'}
                             </p>
 
                             {activePayment.expiredAt && (
                               <p className="text-xs text-amber-600">
-                                ⏱ Дуусах хугацаа: {new Date(activePayment.expiredAt).toLocaleTimeString('mn-MN', { hour: '2-digit', minute: '2-digit' })}
+                                ⏱ Дуусах хугацаа:{' '}
+                                {new Date(activePayment.expiredAt).toLocaleTimeString('mn-MN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
                               </p>
                             )}
 
@@ -452,7 +497,9 @@ export default function WalletPage() {
                                     href={dl.link}
                                     className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs text-gray-700 hover:bg-gray-50"
                                   >
-                                    {dl.logo && <img src={dl.logo} alt={dl.name} className="w-4 h-4" />}
+                                    {dl.logo && (
+                                      <img src={dl.logo} alt={dl.name} className="w-4 h-4" />
+                                    )}
                                     {dl.name}
                                   </a>
                                 ))}
@@ -461,12 +508,16 @@ export default function WalletPage() {
                           </div>
 
                           {topupMsg && (
-                            <p className={clsx(
-                              'text-xs text-center',
-                              topupMsg.includes('амжилттай') ? 'text-green-600'
-                                : topupMsg.includes('амжилтгүй') ? 'text-red-500'
-                                : 'text-amber-600',
-                            )}>
+                            <p
+                              className={clsx(
+                                'text-xs text-center',
+                                topupMsg.includes('амжилттай')
+                                  ? 'text-green-600'
+                                  : topupMsg.includes('амжилтгүй')
+                                    ? 'text-red-500'
+                                    : 'text-amber-600',
+                              )}
+                            >
                               {topupMsg}
                             </p>
                           )}
@@ -491,8 +542,12 @@ export default function WalletPage() {
               <div className="border border-dashed border-amber-300 bg-amber-50 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">🛠</span>
-                  <span className="text-sm font-semibold text-amber-800">Dev Tools — Хэтэвч цэнэглэх</span>
-                  <span className="ml-auto text-xs text-amber-500 bg-amber-100 px-2 py-0.5 rounded-full">DEVELOPMENT ONLY</span>
+                  <span className="text-sm font-semibold text-amber-800">
+                    Dev Tools — Хэтэвч цэнэглэх
+                  </span>
+                  <span className="ml-auto text-xs text-amber-500 bg-amber-100 px-2 py-0.5 rounded-full">
+                    DEVELOPMENT ONLY
+                  </span>
                 </div>
 
                 {/* Quick presets */}
@@ -522,7 +577,10 @@ export default function WalletPage() {
                   <button
                     onClick={() => {
                       const n = Number(devAmount);
-                      if (n > 0) { handleDevTopup(n); setDevAmount(''); }
+                      if (n > 0) {
+                        handleDevTopup(n);
+                        setDevAmount('');
+                      }
                     }}
                     disabled={devTopup.isPending || !devAmount}
                     className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50"
@@ -532,7 +590,12 @@ export default function WalletPage() {
                 </div>
 
                 {devMsg && (
-                  <p className={clsx('text-xs font-medium', devMsg.startsWith('✓') ? 'text-green-700' : 'text-red-600')}>
+                  <p
+                    className={clsx(
+                      'text-xs font-medium',
+                      devMsg.startsWith('✓') ? 'text-green-700' : 'text-red-600',
+                    )}
+                  >
                     {devMsg}
                   </p>
                 )}
@@ -554,11 +617,18 @@ function OverviewTab({ revSummary, txData }: { revSummary: any; txData: any }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: 'Нийт борлуулалт', value: `₮${fmt(revSummary.totalGross)}`, icon: '💰' },
-            { label: 'Платформ хураамж', value: `₮${fmt(revSummary.totalPlatformFee)}`, icon: '🏛️' },
+            {
+              label: 'Платформ хураамж',
+              value: `₮${fmt(revSummary.totalPlatformFee)}`,
+              icon: '🏛️',
+            },
             { label: 'Цэвэр орлого', value: `₮${fmt(revSummary.totalNet)}`, icon: '📈' },
             { label: 'Бүртгэлийн тоо', value: String(revSummary.enrollmentCount), icon: '👥' },
           ].map((s) => (
-            <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
+            <div
+              key={s.label}
+              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center"
+            >
               <p className="text-2xl">{s.icon}</p>
               <p className="text-xs text-gray-500 mt-1">{s.label}</p>
               <p className="text-sm font-bold text-gray-900 mt-0.5">{s.value}</p>
@@ -567,7 +637,9 @@ function OverviewTab({ revSummary, txData }: { revSummary: any; txData: any }) {
         </div>
       )}
 
-      {txData?.items?.slice(0, 5).map((tx: any) => <TxRow key={tx.id} tx={tx} />)}
+      {txData?.items?.slice(0, 5).map((tx: any) => (
+        <TxRow key={tx.id} tx={tx} />
+      ))}
     </div>
   );
 }
@@ -579,7 +651,9 @@ function TransactionsTab({ txData, txLoading, txPage, setTxPage }: any) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="divide-y divide-gray-50">
-        {txData.items.map((tx: any) => <TxRow key={tx.id} tx={tx} />)}
+        {txData.items.map((tx: any) => (
+          <TxRow key={tx.id} tx={tx} />
+        ))}
       </div>
       <Pagination page={txPage} setPage={setTxPage} totalPages={txData.totalPages} />
     </div>
@@ -598,11 +672,13 @@ function RevenueTab({ revSummary, revHistory, revPage, setRevPage }: any) {
               <p className="text-lg font-bold text-gray-900 mt-1">₮{fmt(revSummary.totalGross)}</p>
             </div>
             <div className="text-center p-4 bg-red-50 rounded-xl">
-              <p className="text-xs text-gray-500">Платформ (20%)</p>
-              <p className="text-lg font-bold text-red-600 mt-1">₮{fmt(revSummary.totalPlatformFee)}</p>
+              <p className="text-xs text-gray-500">Платформ ({fmt(revSummary.feePercent)}%)</p>
+              <p className="text-lg font-bold text-red-600 mt-1">
+                ₮{fmt(revSummary.totalPlatformFee)}
+              </p>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-xl">
-              <p className="text-xs text-gray-500">Таны орлого (80%)</p>
+              <p className="text-xs text-gray-500">Таны орлого</p>
               <p className="text-lg font-bold text-green-700 mt-1">₮{fmt(revSummary.totalNet)}</p>
             </div>
           </div>
@@ -616,7 +692,9 @@ function RevenueTab({ revSummary, revHistory, revPage, setRevPage }: any) {
               <div key={r.id} className="flex items-center justify-between px-5 py-3.5">
                 <div>
                   <p className="text-sm text-gray-800">Бүртгэлийн орлого</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{new Date(r.createdAt).toLocaleDateString('mn-MN')}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {new Date(r.createdAt).toLocaleDateString('mn-MN')}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-green-600">+₮{fmt(r.netAmount)}</p>
@@ -632,7 +710,18 @@ function RevenueTab({ revSummary, revHistory, revPage, setRevPage }: any) {
   );
 }
 
-function PayoutsTab({ payoutData, payoutPage, setPayoutPage, showPayoutForm, setShowPayoutForm, payoutForm, setPayoutForm, handlePayout, requestPayout, walletBalance }: any) {
+function PayoutsTab({
+  payoutData,
+  payoutPage,
+  setPayoutPage,
+  showPayoutForm,
+  setShowPayoutForm,
+  payoutForm,
+  setPayoutForm,
+  handlePayout,
+  requestPayout,
+  walletBalance,
+}: any) {
   return (
     <div className="space-y-4">
       <button
@@ -645,7 +734,10 @@ function PayoutsTab({ payoutData, payoutPage, setPayoutPage, showPayoutForm, set
       {showPayoutForm && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">Гаргалтын хүсэлт</h3>
-          <p className="text-xs text-gray-500 mb-4">Одоогийн үлдэгдэл: <span className="font-semibold text-gray-800">₮{fmt(walletBalance)}</span></p>
+          <p className="text-xs text-gray-500 mb-4">
+            Одоогийн үлдэгдэл:{' '}
+            <span className="font-semibold text-gray-800">₮{fmt(walletBalance)}</span>
+          </p>
           <form onSubmit={handlePayout} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -672,11 +764,15 @@ function PayoutsTab({ payoutData, payoutPage, setPayoutPage, showPayoutForm, set
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Дансны дугаар</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Дансны дугаар
+                </label>
                 <input
                   type="text"
                   value={payoutForm.accountNumber}
-                  onChange={(e) => setPayoutForm((p: any) => ({ ...p, accountNumber: e.target.value }))}
+                  onChange={(e) =>
+                    setPayoutForm((p: any) => ({ ...p, accountNumber: e.target.value }))
+                  }
                   placeholder="1234567890"
                   className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
@@ -686,7 +782,9 @@ function PayoutsTab({ payoutData, payoutPage, setPayoutPage, showPayoutForm, set
                 <input
                   type="text"
                   value={payoutForm.accountName}
-                  onChange={(e) => setPayoutForm((p: any) => ({ ...p, accountName: e.target.value }))}
+                  onChange={(e) =>
+                    setPayoutForm((p: any) => ({ ...p, accountName: e.target.value }))
+                  }
                   placeholder="Б. Болд"
                   className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
@@ -713,7 +811,11 @@ function PayoutsTab({ payoutData, payoutPage, setPayoutPage, showPayoutForm, set
               >
                 {requestPayout.isPending ? 'Илгээж байна...' : 'Хүсэлт илгээх'}
               </button>
-              <button type="button" onClick={() => setShowPayoutForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+              <button
+                type="button"
+                onClick={() => setShowPayoutForm(false)}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              >
                 Болих
               </button>
             </div>
@@ -731,41 +833,67 @@ function PayoutsTab({ payoutData, payoutPage, setPayoutPage, showPayoutForm, set
                   <p className="text-xs text-gray-400 mt-0.5">
                     {p.bankName ? `${p.bankName} · ${p.accountNumber ?? '—'}` : '—'}
                   </p>
-                  <p className="text-xs text-gray-400">{new Date(p.createdAt).toLocaleDateString('mn-MN')}</p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(p.createdAt).toLocaleDateString('mn-MN')}
+                  </p>
                 </div>
                 <div className="text-right">
-                  <span className={clsx('px-2 py-0.5 rounded-full text-xs font-medium', PayoutMeta[p.status as PayoutStatus].cls)}>
+                  <span
+                    className={clsx(
+                      'px-2 py-0.5 rounded-full text-xs font-medium',
+                      PayoutMeta[p.status as PayoutStatus].cls,
+                    )}
+                  >
                     {PayoutMeta[p.status as PayoutStatus].label}
                   </span>
                   {p.rejectedReason && (
-                    <p className="text-xs text-red-500 mt-1 max-w-[140px] text-right">{p.rejectedReason}</p>
+                    <p className="text-xs text-red-500 mt-1 max-w-[140px] text-right">
+                      {p.rejectedReason}
+                    </p>
                   )}
                 </div>
               </div>
             ))}
           </div>
-          <Pagination page={payoutPage} setPage={setPayoutPage} totalPages={payoutData.totalPages} />
+          <Pagination
+            page={payoutPage}
+            setPage={setPayoutPage}
+            totalPages={payoutData.totalPages}
+          />
         </div>
       )}
 
-      {!payoutData?.items?.length && !showPayoutForm && <Empty text="Гаргалтын түүх хоосон байна." />}
+      {!payoutData?.items?.length && !showPayoutForm && (
+        <Empty text="Гаргалтын түүх хоосон байна." />
+      )}
     </div>
   );
 }
 
 function TxRow({ tx }: { tx: any }) {
-  const meta = TXMeta[tx.type as TransactionType] ?? { icon: '•', label: tx.type, sign: '+' as const };
+  const meta = TXMeta[tx.type as TransactionType] ?? {
+    icon: '•',
+    label: tx.type,
+    sign: '+' as const,
+  };
   return (
     <div className="flex items-center justify-between px-5 py-3.5">
       <div className="flex items-center gap-3">
         <span className="text-xl">{meta.icon}</span>
         <div>
           <p className="text-sm text-gray-800">{tx.description ?? meta.label}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{new Date(tx.createdAt).toLocaleDateString('mn-MN')}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {new Date(tx.createdAt).toLocaleDateString('mn-MN')}
+          </p>
         </div>
       </div>
       <div className="text-right">
-        <p className={clsx('text-sm font-semibold', meta.sign === '+' ? 'text-green-600' : 'text-red-500')}>
+        <p
+          className={clsx(
+            'text-sm font-semibold',
+            meta.sign === '+' ? 'text-green-600' : 'text-red-500',
+          )}
+        >
           {meta.sign}₮{fmt(tx.amount)}
         </p>
         <p className="text-xs text-gray-400">Үлдэгдэл: ₮{fmt(tx.balanceAfter)}</p>
@@ -774,13 +902,35 @@ function TxRow({ tx }: { tx: any }) {
   );
 }
 
-function Pagination({ page, setPage, totalPages }: { page: number; setPage: (p: number) => void; totalPages: number }) {
+function Pagination({
+  page,
+  setPage,
+  totalPages,
+}: {
+  page: number;
+  setPage: (p: number) => void;
+  totalPages: number;
+}) {
   if (totalPages <= 1) return null;
   return (
     <div className="flex items-center justify-between px-5 py-3 border-t border-gray-50">
-      <button onClick={() => setPage(page - 1)} disabled={page <= 1} className="text-xs text-indigo-600 disabled:text-gray-300 hover:underline">← Өмнөх</button>
-      <span className="text-xs text-gray-400">{page} / {totalPages}</span>
-      <button onClick={() => setPage(page + 1)} disabled={page >= totalPages} className="text-xs text-indigo-600 disabled:text-gray-300 hover:underline">Дараах →</button>
+      <button
+        onClick={() => setPage(page - 1)}
+        disabled={page <= 1}
+        className="text-xs text-indigo-600 disabled:text-gray-300 hover:underline"
+      >
+        ← Өмнөх
+      </button>
+      <span className="text-xs text-gray-400">
+        {page} / {totalPages}
+      </span>
+      <button
+        onClick={() => setPage(page + 1)}
+        disabled={page >= totalPages}
+        className="text-xs text-indigo-600 disabled:text-gray-300 hover:underline"
+      >
+        Дараах →
+      </button>
     </div>
   );
 }
@@ -801,4 +951,3 @@ function Spinner() {
     </div>
   );
 }
-

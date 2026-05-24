@@ -1,11 +1,25 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Post, UseGuards, Headers, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Post,
+  UseGuards,
+  Headers,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiResponseBuilder } from '@lms/shared-utils';
 import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { WalletService } from './wallet.service';
 import { ConfigService } from '@nestjs/config';
 
-interface JwtUser { sub: string; email: string; role: string }
+interface JwtUser {
+  sub: string;
+  email: string;
+  role: string;
+}
 
 @ApiTags('Wallet')
 @ApiBearerAuth('access-token')
@@ -16,15 +30,15 @@ export class WalletController {
 
   @Get('me')
   @ApiOperation({ summary: 'Get my wallet (creates if not exists)' })
-  async getMyWallet(@CurrentUser() user: JwtUser) {
-    const data = await this.walletService.getOrCreate(user.sub);
+  async getMyWallet(@CurrentUser() user: JwtUser, @Headers('x-tenant-id') tenantId = 'demo') {
+    const data = await this.walletService.getOrCreate(user.sub, 'USER', tenantId);
     return ApiResponseBuilder.success(data);
   }
 
   @Post('me/init')
   @ApiOperation({ summary: 'Initialize wallet for current user' })
-  async initWallet(@CurrentUser() user: JwtUser) {
-    const data = await this.walletService.getOrCreate(user.sub);
+  async initWallet(@CurrentUser() user: JwtUser, @Headers('x-tenant-id') tenantId = 'demo') {
+    const data = await this.walletService.getOrCreate(user.sub, 'USER', tenantId);
     return ApiResponseBuilder.success(data, 'Wallet ready');
   }
 
@@ -32,7 +46,8 @@ export class WalletController {
   @ApiOperation({ summary: '[DEV ONLY] Credit funds to own wallet for testing' })
   async devTopup(
     @CurrentUser() user: JwtUser,
-    @Body() body: { amount: number; description?: string },
+    @Body() body: { amount: string | number; description?: string },
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
     if (process.env.NODE_ENV === 'production') {
       throw new ForbiddenException('Not available in production');
@@ -40,14 +55,19 @@ export class WalletController {
     if (!body.amount || Number(body.amount) <= 0) {
       throw new BadRequestException('Amount must be positive');
     }
-    await this.walletService.getOrCreate(user.sub);
+    await this.walletService.getOrCreate(user.sub, 'USER', tenantId);
     const data = await this.walletService.credit(
       user.sub,
-      Number(body.amount),
+      body.amount,
       body.description ?? 'Dev топ-ап',
       'CREDIT',
+      undefined,
+      tenantId,
     );
-    return ApiResponseBuilder.success(data, `₮${Number(body.amount).toLocaleString()} цэнэглэгдлээ`);
+    return ApiResponseBuilder.success(
+      data,
+      `₮${Number(body.amount).toLocaleString()} цэнэглэгдлээ`,
+    );
   }
 }
 
@@ -63,19 +83,22 @@ export class WalletInternalController {
   @ApiOperation({ summary: '[Internal] Deduct wallet balance — service-to-service only' })
   async deduct(
     @Headers('x-internal-secret') secret: string,
-    @Body() body: { ownerId: string; amount: number; description: string; reference?: string },
+    @Headers('x-tenant-id') tenantId = 'demo',
+    @Body()
+    body: { ownerId: string; amount: string | number; description: string; reference?: string },
   ) {
     const expected = this.config.get<string>('INTERNAL_SERVICE_SECRET', 'internal-secret');
     if (secret !== expected) throw new UnauthorizedException('Invalid internal secret');
-    if (!body.ownerId || !body.amount || body.amount <= 0) {
+    if (!body.ownerId || !body.amount || Number(body.amount) <= 0) {
       throw new BadRequestException('ownerId and positive amount required');
     }
     const data = await this.walletService.debit(
       body.ownerId,
-      Number(body.amount),
+      body.amount,
       body.description ?? 'Хэтэвчээр төлбөр',
       'DEBIT',
       body.reference,
+      tenantId,
     );
     return ApiResponseBuilder.success(data);
   }

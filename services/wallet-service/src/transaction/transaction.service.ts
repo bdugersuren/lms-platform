@@ -9,8 +9,8 @@ export class TransactionService {
     private readonly walletService: WalletService,
   ) {}
 
-  async listByOwner(ownerId: string, page = 1, limit = 20) {
-    const wallet = await this.walletService.findByOwner(ownerId);
+  async listByOwner(ownerId: string, page = 1, limit = 20, tenantId = 'demo') {
+    const wallet = await this.walletService.findByOwner(ownerId, tenantId);
 
     const [items, total] = await Promise.all([
       this.prisma.transaction.findMany({
@@ -25,13 +25,13 @@ export class TransactionService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async findOne(id: string, requesterId: string) {
+  async findOne(id: string, requesterId: string, tenantId = 'demo') {
     const tx = await this.prisma.transaction.findUnique({
       where: { id },
-      include: { wallet: { select: { ownerId: true } } },
+      include: { wallet: { select: { ownerId: true, tenantId: true } } },
     });
     if (!tx) throw new NotFoundException(`Transaction ${id} not found`);
-    if (tx.wallet.ownerId !== requesterId) {
+    if (tx.wallet.ownerId !== requesterId || tx.wallet.tenantId !== tenantId) {
       throw new ForbiddenException('Access denied');
     }
     const { wallet: _wallet, ...result } = tx;

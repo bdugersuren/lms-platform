@@ -81,6 +81,17 @@ openssl rand -hex 32
 
 Анхаарах зүйл: `.env` доторх `RABBITMQ_DEFAULT_PASS` болон `RABBITMQ_URL` дахь password заавал ижил байна.
 
+MinIO presigned URL-ийн тохиргоо (browser-аас шууд upload хийхэд ашиглана):
+
+```env
+MINIO_BUCKET=lms-media
+MINIO_PUBLIC_URL=http://localhost:9000
+# Production дээр domain-аар солино, жишээ нь: https://media.example.com/minio-store
+MINIO_PUBLIC_STORE_URL=http://localhost/minio-store
+```
+
+> **Тайлбар:** Browser-аас MinIO руу шууд PUT хийх presigned URL-ийн CORS-ийг nginx `/minio-store/` proxy дамжуулан шийдсэн тул MinIO-д тусдаа CORS тохиргоо хийх шаардлагагүй.
+
 ## 4. Runtime Volume Хавтас Бэлтгэх
 
 Энэ project Docker runtime өгөгдлийг repo доторх `VOLUMES/` хавтас руу хадгална.
@@ -110,6 +121,8 @@ VOLUMES/ollama/data     Ollama model/cache data
 ```bash
 docker compose up -d postgres redis rabbitmq minio
 ```
+
+MinIO bucket автоматаар үүсгэгдэнэ (`mc-init` container ажиллана).
 
 Status шалгах:
 
@@ -155,10 +168,12 @@ docker compose --profile core --profile learn --profile finance --profile ops up
 Энэ нь дараах service-үүдийг хамарна:
 
 ```text
-core:    nginx, gateway, auth-service, course-service, enrollment-service
+core:    nginx, gateway, auth-service, course-service, enrollment-service,
+         user-service, tenant-service, audit-service
 learn:   quiz-service, assignment-service
 finance: wallet-service, payment-service
-ops:     notification-service, media-service, certificate-service, analytics-service
+ops:     notification-service, media-service, certificate-service,
+         analytics-service, ai-service
 ```
 
 ## 8. Frontend/Web Асаах
@@ -232,13 +247,14 @@ bash scripts/docker-seed.sh
 ✓ Seeded 12 service(s).
 ```
 
-Default auth seed хэрэглэгчийн жишээ:
+Default seed хэрэглэгчид:
 
 ```text
-admin@lms.mn / Admin1234!
-superadmin@lms.mn / Admin1234!
-student1@lms.mn / Student1234!
+admin@know.mn    / Admin!1234      (admin, tenant: demo)
+student1@know.mn / Student!1234   (student, tenant: demo)
 ```
+
+> **Анхаарах:** Seed credentials нь `prisma/seed.ts` файлаас хамаарна. Seed дахин ажиллуулбал давхардахгүй (idempotent).
 
 ## 12. Нэгтгэсэн Full Setup Дараалал
 
@@ -334,14 +350,14 @@ tar -czf backups/volumes-all.tar.gz VOLUMES
 
 ## 16. Нийтлэг Асуудал
 
-Postgres холбогдохгүй бол:
+**Postgres холбогдохгүй бол:**
 
 ```bash
 docker compose ps postgres
 docker compose logs postgres
 ```
 
-RabbitMQ access refused бол `.env` доторх эдгээр утгыг шалгана.
+**RabbitMQ access refused бол** `.env` доторх эдгээр утгыг шалгана:
 
 ```env
 RABBITMQ_DEFAULT_USER=lms
@@ -349,22 +365,53 @@ RABBITMQ_DEFAULT_PASS=...
 RABBITMQ_URL=amqp://lms:...@rabbitmq:5672
 ```
 
-Frontend дээр API ажиллахгүй бол:
+RabbitMQ queue argument conflict (PRECONDITION-FAILED 406) гарвал queue-г management API-аар устгана:
+
+```bash
+curl -u lms:<password> -X DELETE http://localhost:15672/api/queues/%2F/<queue-name>
+```
+
+**Frontend дээр API ажиллахгүй бол:**
 
 ```bash
 docker compose logs -f nginx gateway web
 curl http://localhost/api/health
 ```
 
-Seed ажиллахгүй бол:
+**401 Unauthorized бүх endpoint дээр гарвал** tenant resolver-ийг шалгана — gateway `x-tenant-id` header-т slug (жишээ нь `demo`) дамжуулж байгаа эсэхийг баталгаажуулна.
+
+**MinIO presigned upload ажиллахгүй бол** nginx `/minio-store/` proxy-г шалгана:
+
+```bash
+# CORS preflight шалгах
+curl -s -o /dev/null -D - -X OPTIONS http://localhost/minio-store/lms-media/ \
+  -H "Origin: http://localhost:3000" \
+  -H "Access-Control-Request-Method: PUT"
+# HTTP/1.1 204 буцаах ёстой
+
+# nginx config reload хийх
+docker compose restart nginx
+```
+
+> **Тайлбар:** MinIO CORS-ийг `mc cors set` тушаалаар тохируулдаггүй (mc болон MinIO хоорондын API мэдрэмжийн асуудал). Үүний оронд nginx `/minio-store/` location CORS preflight-г шийдэж, `Host: minio:9000` header-ийг дамжуулдаг тул presigned URL-ийн signature шалгалт зөв ажиллана.
+
+**Seed ажиллахгүй бол:**
 
 ```bash
 docker compose ps
 bash scripts/docker-seed.sh
 ```
 
-Port давхардвал тухайн port-ыг ашиглаж байгаа процессыг шалгана.
+**Port давхардвал** тухайн port-ыг ашиглаж байгаа процессыг шалгана:
 
 ```bash
 sudo ss -ltnp
+```
+
+**mc-init container "exited 0" биш бол** log харна:
+
+```bash
+docker compose logs mc-init
+# Bucket үүссэн эсэхийг шалгах
+docker compose exec minio mc ls local/lms-media
 ```

@@ -34,7 +34,7 @@ export class AuthService {
 
   // ─── Registration ────────────────────────────────────────────────────────────
 
-  async register(dto: RegisterDto, meta?: SessionMeta): Promise<IAuthTokens> {
+  async register(dto: RegisterDto, meta?: SessionMeta, tenantId = 'demo'): Promise<IAuthTokens> {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -47,6 +47,7 @@ export class AuthService {
 
     const user = await this.prisma.user.create({
       data: {
+        tenantId,
         email: dto.email,
         passwordHash,
         role: dto.role ?? UserRole.STUDENT,
@@ -57,18 +58,25 @@ export class AuthService {
 
     this.messaging.publishEvent(AuthEventPatterns.USER_REGISTERED, {
       userId: user.id,
+      tenantId: user.tenantId,
       email: user.email,
       role: user.role,
     });
 
-    return this.tokenService.generateTokenPair(user.id, user.email, user.role as UserRole, meta);
+    return this.tokenService.generateTokenPair(
+      user.id,
+      user.email,
+      user.role as UserRole,
+      meta,
+      user.tenantId,
+    );
   }
 
   // ─── Login ───────────────────────────────────────────────────────────────────
 
-  async login(dto: LoginDto, meta?: SessionMeta): Promise<IAuthTokens> {
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+  async login(dto: LoginDto, meta?: SessionMeta, tenantId = 'demo'): Promise<IAuthTokens> {
+    const user = await this.prisma.user.findFirst({
+      where: { email: dto.email, tenantId },
     });
 
     if (!user || !user.isActive) {
@@ -84,10 +92,17 @@ export class AuthService {
 
     this.messaging.publishEvent(AuthEventPatterns.USER_LOGGED_IN, {
       userId: user.id,
+      tenantId: user.tenantId,
       email: user.email,
     });
 
-    return this.tokenService.generateTokenPair(user.id, user.email, user.role as UserRole, meta);
+    return this.tokenService.generateTokenPair(
+      user.id,
+      user.email,
+      user.role as UserRole,
+      meta,
+      user.tenantId,
+    );
   }
 
   // ─── Token refresh ────────────────────────────────────────────────────────────
@@ -174,6 +189,7 @@ export class AuthService {
       where: { id: payload.sub },
       select: {
         id: true,
+        tenantId: true,
         email: true,
         role: true,
         isActive: true,
@@ -191,17 +207,18 @@ export class AuthService {
 
   // ─── Admin: list users ────────────────────────────────────────────────────────
 
-  async listUsers(query: UserQueryDto) {
+  async listUsers(query: UserQueryDto, tenantId = 'demo') {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
-    const where = query.role ? { role: query.role } : {};
+    const where = { tenantId, ...(query.role ? { role: query.role } : {}) };
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
         select: {
           id: true,
+          tenantId: true,
           email: true,
           role: true,
           isActive: true,

@@ -1,7 +1,13 @@
 export type ButtonStyle = 'rounded' | 'pill' | 'square';
 export type CardStyle = 'shadow' | 'border' | 'flat';
 export type TenantLocale = 'mn' | 'en' | 'both';
-export type SocialPlatform = 'facebook' | 'instagram' | 'twitter' | 'youtube' | 'linkedin' | 'tiktok';
+export type SocialPlatform =
+  | 'facebook'
+  | 'instagram'
+  | 'twitter'
+  | 'youtube'
+  | 'linkedin'
+  | 'tiktok';
 
 export type TenantFeatures = {
   aiTutor: boolean;
@@ -96,4 +102,6 @@ export type TenantConfig = {
   homepageSections: HomepageSection[];
   footer: FooterConfig;
   locale: TenantLocale;
+  defaultCurrency?: string;
+  platformFeePercent?: string;
 };

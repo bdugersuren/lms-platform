@@ -1,5 +1,6 @@
 export const SERVICE_ROUTES: Record<string, string | undefined> = {
   auth: process.env.AUTH_SERVICE_URL,
+  tenants: process.env.TENANT_SERVICE_URL,
   users: process.env.USER_SERVICE_URL,
   courses: process.env.COURSE_SERVICE_URL,
   enrollments: process.env.ENROLLMENT_SERVICE_URL,

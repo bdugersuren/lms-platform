@@ -11,21 +11,6 @@ $MC mb --ignore-existing "local/$BUCKET"
 # Allow public read so presigned GET URLs work without extra auth headers
 $MC anonymous set download "local/$BUCKET"
 
-# Configure CORS so browsers can PUT directly using presigned upload URLs.
-# AllowedOrigins should be restricted to known domains in production.
-cat > /tmp/cors.json <<'EOF'
-{
-  "CORSRules": [
-    {
-      "AllowedOrigins": ["*"],
-      "AllowedMethods": ["PUT", "GET", "HEAD"],
-      "AllowedHeaders": ["*"],
-      "MaxAgeSeconds": 3600
-    }
-  ]
-}
-EOF
+# CORS is handled at the nginx /minio-store/ proxy level — no per-bucket CORS needed.
 
-$MC cors set "local/$BUCKET" /tmp/cors.json
-
-echo "MinIO bucket '$BUCKET' initialized with CORS"
+echo "MinIO bucket '$BUCKET' initialized successfully"

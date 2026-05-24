@@ -47,6 +47,7 @@ fi
 declare -A SVC_DB=(
   ["auth-service"]="auth_db"
   ["user-service"]="user_db"
+  ["tenant-service"]="tenant_db"
   ["course-service"]="course_db"
   ["enrollment-service"]="enrollment_db"
   ["quiz-service"]="quiz_db"
@@ -65,6 +66,7 @@ declare -A SVC_DB=(
 ORDERED_SERVICES=(
   "auth-service"
   "user-service"
+  "tenant-service"
   "course-service"
   "enrollment-service"
   "quiz-service"
@@ -99,12 +101,16 @@ seed_service() {
   echo "▶ Seeding $SVC (db: $DB_NAME) ..."
   local RUN_OK=0
 
-  # ── Strategy 1: local prisma binary ───────────────────────────────────���─────
+  # ── Strategy 1: local prisma binary ───────────────────────────────────────
   local LOCAL_PRISMA="$ROOT_DIR/$WORKDIR/node_modules/.bin/prisma"
   if [ -f "$LOCAL_PRISMA" ]; then
     local LOCAL_DB_URL="postgresql://$PG_USER:$PG_PASS@localhost:$PG_PORT/$DB_NAME"
     (
       cd "$ROOT_DIR/$WORKDIR"
+      export PATH="$ROOT_DIR/$WORKDIR/node_modules/.bin:$ROOT_DIR/node_modules/.bin:$PATH"
+      # pnpm workspace-д @prisma/client нэг instance хуваалцдаг тул
+      # seed ажиллуулахаас өмнө тухайн сервисийн schema-р generate хийнэ
+      DATABASE_URL="$LOCAL_DB_URL" "$LOCAL_PRISMA" generate --no-hints 2>/dev/null || true
       DATABASE_URL="$LOCAL_DB_URL" "$LOCAL_PRISMA" db seed 2>&1
     ) || RUN_OK=$?
 
@@ -120,7 +126,7 @@ seed_service() {
 
   # ── Strategy 2/3: Docker container ──────────────────────────────────────────
   local DOCKER_DB_URL="postgresql://$PG_USER:$PG_PASS@postgres:$PG_PORT/$DB_NAME"
-  local SEED_CMD="cd /app/$WORKDIR && npx prisma db seed"
+  local SEED_CMD="cd /app && PATH=/app/node_modules/.bin:\$PATH npx prisma db seed"
 
   local IS_RUNNING
   IS_RUNNING=$(docker compose ps --status running --services 2>/dev/null | grep -x "$SVC" || true)

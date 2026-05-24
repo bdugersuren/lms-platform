@@ -44,7 +44,9 @@ export class EnrollmentService {
         lessonOrder: l.sortOrder,
       }))
       .sort((a, b) =>
-        a.moduleOrder !== b.moduleOrder ? a.moduleOrder - b.moduleOrder : a.lessonOrder - b.lessonOrder,
+        a.moduleOrder !== b.moduleOrder
+          ? a.moduleOrder - b.moduleOrder
+          : a.lessonOrder - b.lessonOrder,
       );
   }
 
@@ -57,14 +59,11 @@ export class EnrollmentService {
 
     return rows.map((row, idx) => ({
       lessonId: row.lessonId,
-      status:
-        !isSequential || idx === 0 ? ProgressStatus.IN_PROGRESS : ProgressStatus.LOCKED,
+      status: !isSequential || idx === 0 ? ProgressStatus.IN_PROGRESS : ProgressStatus.LOCKED,
     }));
   }
 
-  private buildLessonProgressData(
-    course: Awaited<ReturnType<CourseClientService['getCourse']>>,
-  ) {
+  private buildLessonProgressData(course: Awaited<ReturnType<CourseClientService['getCourse']>>) {
     const data = course.modules
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .flatMap((mod) =>
@@ -99,27 +98,33 @@ export class EnrollmentService {
     }
   }
 
-  private async buildLessonProgressRows(courseId: string): Promise<Array<{ lessonId: string; status: ProgressStatus }>> {
+  private async buildLessonProgressRows(
+    courseId: string,
+  ): Promise<Array<{ lessonId: string; status: ProgressStatus }>> {
     const isSequential = await this.resolveIsSequential(courseId);
 
     // Try projection cache first
     const fromProjection = await this.buildProgressFromProjection(courseId, isSequential);
     if (fromProjection) {
-      this.logger.debug(`enroll: using projection for courseId=${courseId} (${fromProjection.length} lessons)`);
+      this.logger.debug(
+        `enroll: using projection for courseId=${courseId} (${fromProjection.length} lessons)`,
+      );
       return fromProjection;
     }
 
     // Fall back to HTTP
-    this.logger.warn(`enroll: projection empty for courseId=${courseId}, falling back to course-service HTTP`);
+    this.logger.warn(
+      `enroll: projection empty for courseId=${courseId}, falling back to course-service HTTP`,
+    );
     const course = await this.courseClient.getCourse(courseId);
     return this.buildLessonProgressData(course);
   }
 
   // ─── Public API ──────────────────────────────────────────────────────────
 
-  async enroll(studentId: string, dto: CreateEnrollmentDto) {
+  async enroll(studentId: string, dto: CreateEnrollmentDto, tenantId = 'demo') {
     const existing = await this.prisma.enrollment.findUnique({
-      where: { courseId_studentId: { courseId: dto.courseId, studentId } },
+      where: { tenantId_courseId_studentId: { tenantId, courseId: dto.courseId, studentId } },
     });
     if (existing) throw new ConflictException('Already enrolled in this course');
 
@@ -127,6 +132,7 @@ export class EnrollmentService {
 
     const enrollment = await this.prisma.enrollment.create({
       data: {
+        tenantId,
         courseId: dto.courseId,
         studentId,
         lessonProgresses: { create: lessonProgressData },
@@ -136,6 +142,7 @@ export class EnrollmentService {
 
     this.messaging.publishEvent(EventTypes.ENROLLMENT_CREATED, {
       enrollmentId: enrollment.id,
+      tenantId: enrollment.tenantId,
       courseId: dto.courseId,
       studentId,
     });
@@ -144,7 +151,12 @@ export class EnrollmentService {
     return enrollment;
   }
 
-  async enrollFromPayment(studentId: string, courseId: string, paymentId: string): Promise<void> {
+  async enrollFromPayment(
+    studentId: string,
+    courseId: string,
+    paymentId: string,
+    tenantId = 'demo',
+  ): Promise<void> {
     // Idempotency: same paymentId never creates a second enrollment
     const byPayment = await this.prisma.enrollment.findFirst({ where: { paymentId } });
     if (byPayment) {
@@ -154,7 +166,7 @@ export class EnrollmentService {
 
     // Guard: already enrolled via other means — link the paymentId and return
     const existing = await this.prisma.enrollment.findUnique({
-      where: { courseId_studentId: { courseId, studentId } },
+      where: { tenantId_courseId_studentId: { tenantId, courseId, studentId } },
     });
     if (existing) {
       if (!existing.paymentId) {
@@ -168,6 +180,7 @@ export class EnrollmentService {
 
     const enrollment = await this.prisma.enrollment.create({
       data: {
+        tenantId,
         courseId,
         studentId,
         paymentId,
@@ -178,16 +191,19 @@ export class EnrollmentService {
 
     this.messaging.publishEvent(EventTypes.ENROLLMENT_CREATED, {
       enrollmentId: enrollment.id,
+      tenantId: enrollment.tenantId,
       courseId,
       studentId,
     });
 
-    this.logger.log(`Auto-enrolled student ${studentId} in course ${courseId} via payment ${paymentId}`);
+    this.logger.log(
+      `Auto-enrolled student ${studentId} in course ${courseId} via payment ${paymentId}`,
+    );
   }
 
-  async unenroll(enrollmentId: string, studentId: string) {
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { id: enrollmentId },
+  async unenroll(enrollmentId: string, studentId: string, tenantId = 'demo') {
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { id: enrollmentId, tenantId },
     });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
     if (enrollment.studentId !== studentId) throw new ForbiddenException();
@@ -196,9 +212,9 @@ export class EnrollmentService {
     this.logger.log(`Student ${studentId} unenrolled from enrollment ${enrollmentId}`);
   }
 
-  async myEnrollments(studentId: string) {
+  async myEnrollments(studentId: string, tenantId = 'demo') {
     const enrollments = await this.prisma.enrollment.findMany({
-      where: { studentId },
+      where: { studentId, tenantId },
       orderBy: { enrolledAt: 'desc' },
       include: {
         lessonProgresses: {
@@ -222,9 +238,9 @@ export class EnrollmentService {
     return results;
   }
 
-  async getEnrollment(enrollmentId: string, studentId: string) {
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { id: enrollmentId },
+  async getEnrollment(enrollmentId: string, studentId: string, tenantId = 'demo') {
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: { id: enrollmentId, tenantId },
       include: { lessonProgresses: true },
     });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
@@ -232,39 +248,39 @@ export class EnrollmentService {
     return enrollment;
   }
 
-  async getEnrollmentByCourse(courseId: string, studentId: string) {
+  async getEnrollmentByCourse(courseId: string, studentId: string, tenantId = 'demo') {
     const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_studentId: { courseId, studentId } },
+      where: { tenantId_courseId_studentId: { tenantId, courseId, studentId } },
       include: { lessonProgresses: true },
     });
     if (!enrollment) throw new NotFoundException('Not enrolled in this course');
     return enrollment;
   }
 
-  async isEnrolled(courseId: string, studentId: string): Promise<boolean> {
+  async isEnrolled(courseId: string, studentId: string, tenantId = 'demo'): Promise<boolean> {
     const count = await this.prisma.enrollment.count({
-      where: { courseId, studentId },
+      where: { courseId, studentId, tenantId },
     });
     return count > 0;
   }
 
   // ─── Course-adjacent compat routes (used by gateway cutover) ──────────────
 
-  async enrollByCourse(courseId: string, studentId: string) {
-    return this.enroll(studentId, { courseId });
+  async enrollByCourse(courseId: string, studentId: string, tenantId = 'demo') {
+    return this.enroll(studentId, { courseId }, tenantId);
   }
 
-  async unenrollByCourse(courseId: string, studentId: string) {
+  async unenrollByCourse(courseId: string, studentId: string, tenantId = 'demo') {
     const enrollment = await this.prisma.enrollment.findUnique({
-      where: { courseId_studentId: { courseId, studentId } },
+      where: { tenantId_courseId_studentId: { tenantId, courseId, studentId } },
     });
     if (!enrollment) throw new NotFoundException('Not enrolled in this course');
-    return this.unenroll(enrollment.id, studentId);
+    return this.unenroll(enrollment.id, studentId, tenantId);
   }
 
-  async listEnrollmentsForCourse(courseId: string) {
+  async listEnrollmentsForCourse(courseId: string, tenantId = 'demo') {
     return this.prisma.enrollment.findMany({
-      where: { courseId },
+      where: { courseId, tenantId },
       orderBy: { enrolledAt: 'desc' },
       select: {
         id: true,

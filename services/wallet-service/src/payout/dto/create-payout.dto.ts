@@ -1,11 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsDecimal, IsOptional, IsString } from 'class-validator';
+import { normalizeMoneyInput } from '@lms/shared-money';
 
 export class CreatePayoutDto {
-  @ApiProperty({ description: 'Amount to withdraw (MNT)' })
-  @IsNumber()
-  @Min(1000)
-  amount!: number;
+  @ApiProperty({ description: 'Amount to withdraw as decimal string (MNT)', example: '50000.00' })
+  @Transform(({ value }) => normalizeMoneyInput(value))
+  @IsDecimal({ decimal_digits: '0,2' })
+  amount!: string;
 
   @ApiPropertyOptional()
   @IsOptional()

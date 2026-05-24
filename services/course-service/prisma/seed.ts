@@ -50,7 +50,7 @@ async function main() {
 
   // ── Course 1 — TypeScript Fundamentals ────────────────────────────────────
   await prisma.course.upsert({
-    where:  { slug: 'typescript-fundamentals' },
+    where:  { id: C.COURSE_1 },
     update: {},
     create: {
       id: C.COURSE_1,
@@ -71,7 +71,7 @@ async function main() {
 
   // ── Course 2 — NestJS Backend Development ────────────────────────────────
   await prisma.course.upsert({
-    where:  { slug: 'nestjs-backend-development' },
+    where:  { id: C.COURSE_2 },
     update: {},
     create: {
       id: C.COURSE_2,
@@ -92,7 +92,7 @@ async function main() {
 
   // ── Course 3 — Docker & DevOps Essentials ────────────────────────────────
   await prisma.course.upsert({
-    where:  { slug: 'docker-devops-essentials' },
+    where:  { id: C.COURSE_3 },
     update: {},
     create: {
       id: C.COURSE_3,

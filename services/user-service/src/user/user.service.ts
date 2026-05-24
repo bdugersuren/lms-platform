@@ -13,48 +13,59 @@ export class UserService {
   // Called by the event listener when auth.user.registered is received.
   // Idempotent: safe to replay; update:{} means existing profiles are untouched.
 
-  async bootstrap(userId: string, email: string): Promise<void> {
+  async bootstrap(userId: string, email: string, tenantId = 'demo'): Promise<void> {
     const displayName = email.split('@')[0];
     await this.prisma.userProfile.upsert({
-      where:  { id: userId },
+      where: { id: userId },
       update: {},
-      create: { id: userId, displayName, locale: 'mn', timezone: 'Asia/Ulaanbaatar' },
+      create: { id: userId, tenantId, displayName, locale: 'mn', timezone: 'Asia/Ulaanbaatar' },
     });
     this.logger.log(`Profile bootstrapped: userId=${userId}`);
   }
 
   // ─── Own profile ──────────────────────────────────────────────────────────
 
-  async findMe(userId: string): Promise<UserProfile> {
-    const profile = await this.prisma.userProfile.findUnique({ where: { id: userId } });
+  async findMe(userId: string, tenantId = 'demo'): Promise<UserProfile> {
+    const profile = await this.prisma.userProfile.findFirst({
+      where: { id: userId, tenantId },
+    });
     if (!profile) {
       throw new NotFoundException('User profile not found');
     }
     return profile;
   }
 
-  async updateMe(userId: string, email: string, dto: UpdateProfileDto): Promise<UserProfile> {
+  async updateMe(
+    userId: string,
+    email: string,
+    dto: UpdateProfileDto,
+    tenantId = 'demo',
+  ): Promise<UserProfile> {
     // Auto-bootstrap profile if it doesn't exist (handles seeded/OAuth users)
     await this.prisma.userProfile.upsert({
-      where:  { id: userId },
+      where: { id: userId },
       update: {},
       create: {
-        id:          userId,
+        id: userId,
+        tenantId,
         displayName: dto.displayName ?? email.split('@')[0],
-        locale:      'mn',
-        timezone:    'Asia/Ulaanbaatar',
+        locale: 'mn',
+        timezone: 'Asia/Ulaanbaatar',
       },
     });
     return this.prisma.userProfile.update({
       where: { id: userId },
-      data:  dto,
+      data: dto,
     });
   }
 
   // ─── Public profile ───────────────────────────────────────────────────────
   // Returns limited fields suitable for display in course listings and certificates.
 
-  async findPublic(userId: string): Promise<{
+  async findPublic(
+    userId: string,
+    tenantId = 'demo',
+  ): Promise<{
     id: string;
     displayName: string;
     firstName: string | null;
@@ -64,11 +75,17 @@ export class UserService {
     headline: string | null;
     expertise: string[];
   }> {
-    const profile = await this.prisma.userProfile.findUnique({
-      where:  { id: userId },
+    const profile = await this.prisma.userProfile.findFirst({
+      where: { id: userId, tenantId },
       select: {
-        id: true, displayName: true, firstName: true, lastName: true,
-        avatarUrl: true, bio: true, headline: true, expertise: true,
+        id: true,
+        displayName: true,
+        firstName: true,
+        lastName: true,
+        avatarUrl: true,
+        bio: true,
+        headline: true,
+        expertise: true,
       },
     });
     if (!profile) {

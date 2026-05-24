@@ -25,6 +25,7 @@ COPY packages/shared-types/package.json  packages/shared-types/
 COPY packages/shared-utils/package.json  packages/shared-utils/
 COPY packages/shared-auth/package.json   packages/shared-auth/
 COPY packages/shared-config/package.json packages/shared-config/
+COPY packages/shared-money/package.json  packages/shared-money/
 COPY services/wallet-service/package.json  services/wallet-service/
 COPY services/wallet-service/prisma        services/wallet-service/prisma/
 
@@ -36,7 +37,8 @@ COPY packages/ packages/
 RUN pnpm --filter @lms/shared-types  run build && \
     pnpm --filter @lms/shared-utils  run build && \
     pnpm --filter @lms/shared-auth   run build && \
-    pnpm --filter @lms/shared-config run build
+    pnpm --filter @lms/shared-config run build && \
+    pnpm --filter @lms/shared-money  run build
 
 FROM shared-build AS deploy
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \

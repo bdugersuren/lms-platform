@@ -131,6 +131,7 @@ run_migration() {
 # Дараалал: хамааралтай сервисүүдийг нь өмнө нь ажиллуулна
 run_migration "auth-service"         "services/auth-service"         "auth_db"
 run_migration "user-service"         "services/user-service"         "user_db"
+run_migration "tenant-service"       "services/tenant-service"       "tenant_db"
 run_migration "course-service"       "services/course-service"       "course_db"
 run_migration "enrollment-service"   "services/enrollment-service"   "enrollment_db"
 run_migration "quiz-service"         "services/quiz-service"         "quiz_db"

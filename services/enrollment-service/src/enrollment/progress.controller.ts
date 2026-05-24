@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -34,8 +35,9 @@ export class ProgressController {
     @CurrentUser() user: JwtUser,
     @Param('enrollmentId', ParseUUIDPipe) enrollmentId: string,
     @Param('lessonId', ParseUUIDPipe) lessonId: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.progressService.startLesson(enrollmentId, lessonId, user.sub);
+    const data = await this.progressService.startLesson(enrollmentId, lessonId, user.sub, tenantId);
     return ApiResponseBuilder.success(data, 'Lesson started');
   }
 
@@ -47,8 +49,16 @@ export class ProgressController {
     @Param('lessonId', ParseUUIDPipe) lessonId: string,
     @Param('interactiveBlockId', ParseUUIDPipe) interactiveBlockId: string,
     @Body() dto: SubmitBlockAnswersDto,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.progressService.submitBlockAnswers(enrollmentId, lessonId, interactiveBlockId, dto, user.sub);
+    const data = await this.progressService.submitBlockAnswers(
+      enrollmentId,
+      lessonId,
+      interactiveBlockId,
+      dto,
+      user.sub,
+      tenantId,
+    );
     return ApiResponseBuilder.success(data, 'Answers submitted');
   }
 
@@ -57,8 +67,9 @@ export class ProgressController {
   async getProgress(
     @CurrentUser() user: JwtUser,
     @Param('enrollmentId', ParseUUIDPipe) enrollmentId: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.progressService.getProgress(enrollmentId, user.sub);
+    const data = await this.progressService.getProgress(enrollmentId, user.sub, tenantId);
     return ApiResponseBuilder.success(data);
   }
 
@@ -69,12 +80,14 @@ export class ProgressController {
     @Param('enrollmentId', ParseUUIDPipe) enrollmentId: string,
     @Param('lessonId', ParseUUIDPipe) lessonId: string,
     @Body() dto: UpdateLessonProgressDto,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
     const data = await this.progressService.updateLessonProgress(
       enrollmentId,
       lessonId,
       user.sub,
       dto,
+      tenantId,
     );
     return ApiResponseBuilder.success(data);
   }
@@ -85,11 +98,13 @@ export class ProgressController {
     @CurrentUser() user: JwtUser,
     @Param('enrollmentId', ParseUUIDPipe) enrollmentId: string,
     @Param('lessonId', ParseUUIDPipe) lessonId: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
     const data = await this.progressService.completeLesson(
       enrollmentId,
       lessonId,
       user.sub,
+      tenantId,
     );
     return ApiResponseBuilder.success(data, 'Lesson completed');
   }

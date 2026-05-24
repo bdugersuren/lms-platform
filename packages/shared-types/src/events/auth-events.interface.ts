@@ -12,6 +12,7 @@ export type AuthEventPattern = (typeof AuthEventPatterns)[keyof typeof AuthEvent
 
 export interface UserRegisteredEvent {
   userId: string;
+  tenantId?: string;
   email: string;
   role: UserRole;
   timestamp: string;
@@ -19,6 +20,7 @@ export interface UserRegisteredEvent {
 
 export interface UserLoggedInEvent {
   userId: string;
+  tenantId?: string;
   email: string;
   ipAddress?: string;
   userAgent?: string;

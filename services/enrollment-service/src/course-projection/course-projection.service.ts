@@ -227,6 +227,7 @@ export class CourseProjectionService {
       where: { courseId: course.courseId },
       create: {
         courseId: course.courseId,
+        tenantId: course.tenantId ?? 'demo',
         title: course.title,
         slug: course.slug,
         instructorId: course.instructorId,
@@ -242,6 +243,7 @@ export class CourseProjectionService {
         minimumScorePercent: course.minimumScorePercent ?? 0,
       },
       update: {
+        tenantId: course.tenantId ?? 'demo',
         title: course.title,
         slug: course.slug,
         instructorId: course.instructorId,
@@ -342,6 +344,7 @@ export class CourseProjectionService {
     title: string;
     slug: string;
     instructorId?: string;
+    tenantId?: string;
     price?: string;
     status?: string;
     isSequential: boolean;
@@ -369,6 +372,7 @@ export class CourseProjectionService {
     await this.prisma.$transaction(async (tx) => {
       await this.upsertCourse(tx, {
         courseId: course.id,
+        tenantId: course.tenantId ?? 'demo',
         title: course.title,
         slug: course.slug,
         instructorId: course.instructorId ?? 'unknown',

@@ -3,9 +3,10 @@ import { HttpModule } from '@nestjs/axios';
 import { ProxyController } from './proxy.controller';
 import { CourseEnrollmentController } from './course-enrollment.controller';
 import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
+import { TenantModule } from '../tenant/tenant.module';
 
 @Module({
-  imports: [HttpModule],
+  imports: [HttpModule, TenantModule],
   // CourseEnrollmentController must be listed BEFORE ProxyController so NestJS/Fastify
   // registers its more-specific routes first and they take precedence over the wildcard.
   controllers: [CourseEnrollmentController, ProxyController],

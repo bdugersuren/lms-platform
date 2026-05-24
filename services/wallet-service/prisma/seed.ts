@@ -28,7 +28,7 @@ async function main() {
 
   for (const w of WALLETS) {
     await prisma.wallet.upsert({
-      where:  { ownerId: w.ownerId },
+      where:  { id: w.id },
       update: {},
       create: { ...w, status: WalletStatus.ACTIVE, currency: 'MNT', ownerType: 'USER' },
     });

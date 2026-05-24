@@ -4,7 +4,7 @@ import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-valida
 export class CreateSessionDto {
   @ApiPropertyOptional({ description: 'Course context for the session' })
   @IsOptional()
-  @IsUUID()
+  @IsString()
   courseId?: string;
 
   @ApiPropertyOptional()

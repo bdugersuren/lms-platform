@@ -1,5 +1,6 @@
 export interface MediaFileUploadedPayload {
   mediaFileId: string;
+  tenantId?: string;
   userId: string;
   fileName: string;
   mimeType: string;
@@ -9,11 +10,13 @@ export interface MediaFileUploadedPayload {
 
 export interface MediaFileDeletedPayload {
   mediaFileId: string;
+  tenantId?: string;
   userId: string;
 }
 
 export interface MediaTranscodeQueuedPayload {
   jobId: string;
+  tenantId?: string;
   mediaFileId: string;
   sourceKey: string;
   format: string;
@@ -21,6 +24,7 @@ export interface MediaTranscodeQueuedPayload {
 
 export interface MediaTranscodeCompletedPayload {
   jobId: string;
+  tenantId?: string;
   mediaFileId: string;
   format: string;
   outputKey: string;
@@ -28,6 +32,7 @@ export interface MediaTranscodeCompletedPayload {
 
 export interface MediaTranscodeFailedPayload {
   jobId: string;
+  tenantId?: string;
   mediaFileId: string;
   format: string;
   errorMsg: string;

@@ -4,7 +4,7 @@ import { NotificationType, NotificationChannel } from '@prisma/client';
 
 export class CreateNotificationDto {
   @ApiProperty()
-  @IsUUID()
+  @IsString()
   userId: string;
 
   @ApiPropertyOptional({ enum: NotificationType, default: NotificationType.INFO })

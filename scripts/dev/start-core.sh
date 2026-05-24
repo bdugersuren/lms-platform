@@ -5,7 +5,7 @@
 #        bash scripts/dev/start-core.sh
 #
 # Starts: postgres, redis, rabbitmq, minio, nginx, gateway,
-#         auth-service, user-service, course-service, enrollment-service
+#         auth-service, user-service, tenant-service, course-service, enrollment-service
 # =============================================================================
 set -euo pipefail
 
@@ -25,3 +25,4 @@ printf "\n"
 log_info "API gateway:  http://localhost:3000/api"
 log_info "Swagger UI:   http://localhost:3001/api/docs  (auth-service)"
 log_info "              http://localhost:3014/api/docs  (user-service)"
+log_info "              http://localhost:3016/api/docs  (tenant-service)"

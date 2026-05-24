@@ -43,13 +43,13 @@ The platform is an **event-driven microservice monorepo** where each service is 
              │  │  │  │  │  │   HTTP (synchronous)
    ┌─────────┘  │  │  │  │  └─────────────────────┐
    ▼            ▼  │  │  ▼                         ▼
-auth:3001  user:3002│  │ course:3003          payment:3008
+auth:3001  user:3014│  │ course:3003          payment:3008
                     │  │
-              quiz:3004  enrollment:3005
+              quiz:3005  enrollment:3004
               wallet:3007 assignment:3006
               ai:3009   notification:3010
               media:3011 certificate:3012
-              analytics:3013
+              analytics:3013 audit:3015
 
           All services publish/subscribe via:
           ┌─────────────────────────────────┐
@@ -59,8 +59,10 @@ auth:3001  user:3002│  │ course:3003          payment:3008
           ┌──────────┘         └──────────┐
           ▼                               ▼
    PostgreSQL :5432                  Redis :6379
-   (13 isolated databases)      (tokens · rate limits)
+   (15 isolated databases)      (tokens · rate limits)
 ```
+
+*Ports shown are internal container ports. See [`docs/generated/current-architecture.md`](../generated/current-architecture.md) for the complete authoritative service list.*
 
 ### Design Principles
 
@@ -120,7 +122,7 @@ lms-platform/
 │
 ├── infra/
 │   ├── nginx/nginx.conf
-│   ├── postgres/init.sql       # Creates all 13 databases
+│   ├── postgres/init.sql       # Creates all 15 databases
 │   ├── rabbitmq/definitions.json
 │   └── redis/
 │
@@ -171,22 +173,28 @@ services/course-service/
 
 ## 3. Microservice Inventory
 
-| Service | Internal Port | Database | Primary Responsibility |
-|---------|-------------|----------|----------------------|
-| **gateway** | 3000 | — | JWT validation, rate limiting, route forwarding |
-| **auth-service** | 3001 | `auth_db` | Login, register, JWT, refresh tokens, OAuth |
-| **user-service** | 3002 | `user_db` | User profiles, preferences |
-| **course-service** | 3003 | `course_db` | Courses, modules, lessons, curriculum |
-| **enrollment-service** | 3005 | `enrollment_db` | Enrollments, progress, completion |
-| **quiz-service** | 3004 | `quiz_db` | Quizzes, adaptive exams, question bank |
-| **assignment-service** | 3006 | `assignment_db` | Assignments, submissions, grading |
-| **wallet-service** | 3007 | `wallet_db` | Wallet, transactions, revenue sharing |
-| **payment-service** | 3008 | `payment_db` | QPay, SocialPay, Mock, webhooks |
-| **ai-service** | 3009 | `ai_db` | Essay scoring, AI tutor, Ollama |
-| **notification-service** | 3010 | `notification_db` | Email, SMS, push, in-app |
-| **media-service** | 3011 | MinIO | Video upload, transcoding, subtitles |
-| **certificate-service** | 3012 | `certificate_db` | Certificate generation, QR verify |
-| **analytics-service** | 3013 | `analytics_db` | KPI, reports, event log |
+> **Canonical reference:** [`docs/generated/current-architecture.md`](../generated/current-architecture.md) is auto-generated from `config/services.yml` and `docker-compose.yml` and is always up to date. The table below is a summary — if values differ, the generated file wins.
+
+| Service | Internal Port | Compose Profile | Database | Primary Responsibility |
+|---------|:---:|:---:|----------|----------------------|
+| **gateway** | 3000 | core | — | JWT validation, rate limiting, route forwarding |
+| **auth-service** | 3001 | core | `auth_db` | Login, register, JWT, refresh tokens, OAuth |
+| **user-service** | 3014 | core | `user_db` | User profiles, display name, avatar, preferences |
+| **tenant-service** | 3016 | core | `tenant_db` | Tenants, custom domains, branding, feature flags |
+| **course-service** | 3003 | core | `course_db` | Courses, modules, lessons, curriculum |
+| **enrollment-service** | 3004 | core | `enrollment_db` | Enrollments, progress, completion |
+| **quiz-service** | 3005 | learn | `quiz_db` | Quizzes, adaptive exams, question bank |
+| **assignment-service** | 3006 | learn | `assignment_db` | Assignments, submissions, grading |
+| **wallet-service** | 3007 | finance | `wallet_db` | Wallet, transactions, revenue sharing |
+| **payment-service** | 3008 | finance | `payment_db` | QPay, SocialPay, Mock, webhooks |
+| **ai-service** | 3009 | ai | `ai_db` | Essay scoring, AI tutor, Ollama inference |
+| **notification-service** | 3010 | ops | `notification_db` | Email, SMS, push, in-app notifications |
+| **media-service** | 3011 | ops | `media_db` | Video upload, transcoding, subtitles (MinIO storage) |
+| **certificate-service** | 3012 | ops | `certificate_db` | Certificate generation, QR verify (MinIO storage) |
+| **analytics-service** | 3013 | ops | `analytics_db` | KPI, reports, event log |
+| **audit-service** | 3015 | ops | `audit_db` | Immutable audit logs for compliance |
+
+For the complete port allocation, dependency graph, and environment variable inventory see [`docs/generated/current-architecture.md`](../generated/current-architecture.md).
 
 ---
 
@@ -359,10 +367,11 @@ OLLAMA_TIMEOUT_MS=120000
 
 # ── Gateway upstream URLs ────────────────────────────────────────
 AUTH_SERVICE_URL=http://auth-service:3001
-USER_SERVICE_URL=http://user-service:3002
+USER_SERVICE_URL=http://user-service:3014
+TENANT_SERVICE_URL=http://tenant-service:3016
 COURSE_SERVICE_URL=http://course-service:3003
-ENROLLMENT_SERVICE_URL=http://enrollment-service:3005
-QUIZ_SERVICE_URL=http://quiz-service:3004
+ENROLLMENT_SERVICE_URL=http://enrollment-service:3004
+QUIZ_SERVICE_URL=http://quiz-service:3005
 ASSIGNMENT_SERVICE_URL=http://assignment-service:3006
 WALLET_SERVICE_URL=http://wallet-service:3007
 PAYMENT_SERVICE_URL=http://payment-service:3008
@@ -371,6 +380,7 @@ NOTIFICATION_SERVICE_URL=http://notification-service:3010
 MEDIA_SERVICE_URL=http://media-service:3011
 CERTIFICATE_SERVICE_URL=http://certificate-service:3012
 ANALYTICS_SERVICE_URL=http://analytics-service:3013
+AUDIT_SERVICE_URL=http://audit-service:3015
 
 # ── Rate limiting (gateway) ──────────────────────────────────────
 THROTTLE_TTL=60000    # window in ms
@@ -710,22 +720,24 @@ Each service owns exactly one PostgreSQL database. The `prisma/schema.prisma` fi
 
 ```
 postgres:5432
-├── auth_db        → auth-service/prisma/schema.prisma
-├── user_db        → user-service/prisma/schema.prisma
-├── course_db      → course-service/prisma/schema.prisma
-├── enrollment_db  → enrollment-service/prisma/schema.prisma
-├── quiz_db        → quiz-service/prisma/schema.prisma
-├── assignment_db  → assignment-service/prisma/schema.prisma
-├── wallet_db      → wallet-service/prisma/schema.prisma
-├── payment_db     → payment-service/prisma/schema.prisma
-├── ai_db          → ai-service/prisma/schema.prisma
+├── auth_db         → auth-service/prisma/schema.prisma
+├── user_db         → user-service/prisma/schema.prisma
+├── tenant_db       → tenant-service/prisma/schema.prisma
+├── course_db       → course-service/prisma/schema.prisma
+├── enrollment_db   → enrollment-service/prisma/schema.prisma
+├── quiz_db         → quiz-service/prisma/schema.prisma
+├── assignment_db   → assignment-service/prisma/schema.prisma
+├── wallet_db       → wallet-service/prisma/schema.prisma
+├── payment_db      → payment-service/prisma/schema.prisma
+├── ai_db           → ai-service/prisma/schema.prisma
 ├── notification_db → notification-service/prisma/schema.prisma
-├── media_db       → media-service/prisma/schema.prisma
-├── certificate_db → certificate-service/prisma/schema.prisma
-└── analytics_db   → analytics-service/prisma/schema.prisma
+├── media_db        → media-service/prisma/schema.prisma
+├── certificate_db  → certificate-service/prisma/schema.prisma
+├── analytics_db    → analytics-service/prisma/schema.prisma
+└── audit_db        → audit-service/prisma/schema.prisma
 ```
 
-All 13 databases are created by `infra/postgres/init.sql` on first startup.
+All 15 databases are created by `infra/postgres/init.sql` on first startup.
 
 ### PrismaService Pattern
 

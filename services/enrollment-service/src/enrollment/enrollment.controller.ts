@@ -4,18 +4,14 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Headers,
   Param,
   ParseUUIDPipe,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiQuery,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard, CurrentUser } from '@lms/shared-auth';
 import { EnrollmentService } from './enrollment.service';
 import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
@@ -40,15 +36,19 @@ export class EnrollmentController {
 
   @Post()
   @ApiOperation({ summary: 'Enroll in a course' })
-  async enroll(@CurrentUser() user: JwtUser, @Body() dto: CreateEnrollmentDto) {
-    const data = await this.enrollmentService.enroll(user.sub, dto);
+  async enroll(
+    @CurrentUser() user: JwtUser,
+    @Body() dto: CreateEnrollmentDto,
+    @Headers('x-tenant-id') tenantId = 'demo',
+  ) {
+    const data = await this.enrollmentService.enroll(user.sub, dto, tenantId);
     return ApiResponseBuilder.success(data, 'Enrolled successfully');
   }
 
   @Get('my')
   @ApiOperation({ summary: 'List my enrollments' })
-  async myEnrollments(@CurrentUser() user: JwtUser) {
-    const data = await this.enrollmentService.myEnrollments(user.sub);
+  async myEnrollments(@CurrentUser() user: JwtUser, @Headers('x-tenant-id') tenantId = 'demo') {
+    const data = await this.enrollmentService.myEnrollments(user.sub, tenantId);
     return ApiResponseBuilder.success(data);
   }
 
@@ -58,8 +58,9 @@ export class EnrollmentController {
   async checkEnrollment(
     @CurrentUser() user: JwtUser,
     @Query('courseId', ParseUUIDPipe) courseId: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const enrolled = await this.enrollmentService.isEnrolled(courseId, user.sub);
+    const enrolled = await this.enrollmentService.isEnrolled(courseId, user.sub, tenantId);
     return ApiResponseBuilder.success({ enrolled });
   }
 
@@ -68,8 +69,9 @@ export class EnrollmentController {
   async getEnrollmentByCourse(
     @CurrentUser() user: JwtUser,
     @Param('courseId', ParseUUIDPipe) courseId: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.enrollmentService.getEnrollmentByCourse(courseId, user.sub);
+    const data = await this.enrollmentService.getEnrollmentByCourse(courseId, user.sub, tenantId);
     return ApiResponseBuilder.success(data);
   }
 
@@ -78,8 +80,9 @@ export class EnrollmentController {
   async getEnrollment(
     @CurrentUser() user: JwtUser,
     @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.enrollmentService.getEnrollment(id, user.sub);
+    const data = await this.enrollmentService.getEnrollment(id, user.sub, tenantId);
     return ApiResponseBuilder.success(data);
   }
 
@@ -88,8 +91,9 @@ export class EnrollmentController {
   async unenroll(
     @CurrentUser() user: JwtUser,
     @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    await this.enrollmentService.unenroll(id, user.sub);
+    await this.enrollmentService.unenroll(id, user.sub, tenantId);
     return ApiResponseBuilder.success(null, 'Unenrolled successfully');
   }
 
@@ -100,8 +104,9 @@ export class EnrollmentController {
   async enrollByCourse(
     @CurrentUser() user: JwtUser,
     @Param('courseId', ParseUUIDPipe) courseId: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    const data = await this.enrollmentService.enrollByCourse(courseId, user.sub);
+    const data = await this.enrollmentService.enrollByCourse(courseId, user.sub, tenantId);
     return ApiResponseBuilder.success(data, 'Enrolled successfully');
   }
 
@@ -110,8 +115,9 @@ export class EnrollmentController {
   async unenrollByCourse(
     @CurrentUser() user: JwtUser,
     @Param('courseId', ParseUUIDPipe) courseId: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    await this.enrollmentService.unenrollByCourse(courseId, user.sub);
+    await this.enrollmentService.unenrollByCourse(courseId, user.sub, tenantId);
     return ApiResponseBuilder.success(null, 'Unenrolled successfully');
   }
 
@@ -120,9 +126,11 @@ export class EnrollmentController {
   async listByCourse(
     @CurrentUser() user: JwtUser,
     @Param('courseId', ParseUUIDPipe) courseId: string,
+    @Headers('x-tenant-id') tenantId = 'demo',
   ) {
-    if (!isAdminRole(user.role)) throw new ForbiddenException('Admin or instructor access required');
-    const data = await this.enrollmentService.listEnrollmentsForCourse(courseId);
+    if (!isAdminRole(user.role))
+      throw new ForbiddenException('Admin or instructor access required');
+    const data = await this.enrollmentService.listEnrollmentsForCourse(courseId, tenantId);
     return ApiResponseBuilder.success(data);
   }
 }

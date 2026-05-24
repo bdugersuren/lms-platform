@@ -3,8 +3,18 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useCourse, usePublishCourse, useArchiveCourse, useDeleteCourse } from '@/hooks/use-courses';
-import { useCheckEnrollment, useEnroll, useUnenroll, useEnrollmentByCourse } from '@/hooks/use-enrollment';
+import {
+  useCourse,
+  usePublishCourse,
+  useArchiveCourse,
+  useDeleteCourse,
+} from '@/hooks/use-courses';
+import {
+  useCheckEnrollment,
+  useEnroll,
+  useUnenroll,
+  useEnrollmentByCourse,
+} from '@/hooks/use-enrollment';
 import { useCreatePayment } from '@/hooks/use-payment';
 import { useCertificates } from '@/hooks/use-certificate';
 import { useMe } from '@/hooks/use-auth';
@@ -38,7 +48,10 @@ export default function CourseDetailPage() {
   const { data: enrollmentCheck } = useCheckEnrollment(id);
   const isEnrolled = enrollmentCheck?.enrolled ?? false;
   const { data: enrollment } = useEnrollmentByCourse(isEnrolled ? id : null);
-  const { data: certificates } = useCertificates({ limit: 100, enabled: isAuthenticated && isEnrolled });
+  const { data: certificates } = useCertificates({
+    limit: 100,
+    enabled: isAuthenticated && isEnrolled,
+  });
   const enroll = useEnroll();
   const unenroll = useUnenroll();
 
@@ -62,12 +75,15 @@ export default function CourseDetailPage() {
 
   const handleBuy = (provider: 'QPAY' | 'SOCIAL_PAY' | 'WALLET' = 'QPAY') => {
     if (!course) return;
-    if (!isAuthenticated) { router.push('/login'); return; }
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
     setEnrollError('');
     createPayment.mutate(
       {
         courseId: id,
-        amount: Number(course.price),
+        amount: String(course.price),
         provider,
         description: `Сургалт: ${course.title}`,
       },
@@ -85,7 +101,10 @@ export default function CourseDetailPage() {
   };
 
   const handleEnroll = () => {
-    if (!isAuthenticated) { router.push('/login'); return; }
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
     setEnrollError('');
     enroll.mutate(id, {
       onError: (err) => setEnrollError(err.message),
@@ -140,14 +159,19 @@ export default function CourseDetailPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-500 mb-4">{error?.message ?? 'Сургалт олдсонгүй'}</p>
-          <Link href="/courses" className="text-indigo-600 hover:underline text-sm">Сургалтууд руу буцах</Link>
+          <Link href="/courses" className="text-indigo-600 hover:underline text-sm">
+            Сургалтууд руу буцах
+          </Link>
         </div>
       </div>
     );
   }
 
   const totalLessons = course.modules.reduce((sum, m) => sum + m.lessons.length, 0);
-  const freeLessons = course.modules.reduce((sum, m) => sum + m.lessons.filter((l) => l.isPreview).length, 0);
+  const freeLessons = course.modules.reduce(
+    (sum, m) => sum + m.lessons.filter((l) => l.isPreview).length,
+    0,
+  );
 
   const sideCard = (
     <div className="p-5 space-y-4">
@@ -174,8 +198,9 @@ export default function CourseDetailPage() {
       {enrollError && <p className="text-red-500 text-xs">{enrollError}</p>}
 
       {/* CTA */}
-      {course.status === 'PUBLISHED' && !canManage && (
-        isEnrolled ? (
+      {course.status === 'PUBLISHED' &&
+        !canManage &&
+        (isEnrolled ? (
           <div className="space-y-3">
             <div className="space-y-1">
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
@@ -184,7 +209,9 @@ export default function CourseDetailPage() {
                   style={{ width: `${enrollment?.progressPercent ?? 0}%` }}
                 />
               </div>
-              <p className="text-xs text-slate-500 text-right">{enrollment?.progressPercent ?? 0}% дууссан</p>
+              <p className="text-xs text-slate-500 text-right">
+                {enrollment?.progressPercent ?? 0}% дууссан
+              </p>
             </div>
             {enrollment?.completed ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -274,8 +301,7 @@ export default function CourseDetailPage() {
           >
             {enroll.isPending ? 'Бүртгүүлж байна...' : 'Үнэгүй бүртгүүлэх'}
           </button>
-        )
-      )}
+        ))}
 
       {canManage && (
         <Link
@@ -298,7 +324,9 @@ export default function CourseDetailPage() {
         {course.totalMinutes > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-slate-400">⏱</span>
-            <span>{Math.floor(course.totalMinutes / 60)}ц {course.totalMinutes % 60}м нийт хугацаа</span>
+            <span>
+              {Math.floor(course.totalMinutes / 60)}ц {course.totalMinutes % 60}м нийт хугацаа
+            </span>
           </div>
         )}
         {freeLessons > 0 && (
@@ -319,7 +347,9 @@ export default function CourseDetailPage() {
           <span className="text-slate-400 shrink-0">🏆</span>
           <div>
             <span>Гэрчилгээ олгогдоно</span>
-            <p className="text-xs text-slate-400 mt-0.5">Бүх хичээлийг дуусгасны дараа автоматаар олгогдоно</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Бүх хичээлийг дуусгасны дараа автоматаар олгогдоно
+            </p>
           </div>
         </div>
       </div>
@@ -338,9 +368,13 @@ export default function CourseDetailPage() {
       {/* Sticky breadcrumb */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
-          <Link href="/courses" className="text-slate-500 hover:text-slate-800 text-sm">← Сургалтууд</Link>
+          <Link href="/courses" className="text-slate-500 hover:text-slate-800 text-sm">
+            ← Сургалтууд
+          </Link>
           <span className="text-slate-300">/</span>
-          <span className="text-sm font-medium text-slate-800 truncate max-w-xs">{course.title}</span>
+          <span className="text-sm font-medium text-slate-800 truncate max-w-xs">
+            {course.title}
+          </span>
         </div>
       </header>
 
@@ -351,44 +385,73 @@ export default function CourseDetailPage() {
           <div className="bg-slate-900 text-white px-6 sm:px-10 py-10">
             {/* Badges */}
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              <span className={clsx('text-xs px-2.5 py-0.5 rounded-full font-semibold', {
-                'bg-green-500/20 text-green-400': course.level === 'BEGINNER',
-                'bg-yellow-500/20 text-yellow-400': course.level === 'INTERMEDIATE',
-                'bg-red-500/20 text-red-400': course.level === 'ADVANCED',
-              })}>
-                {course.level === 'BEGINNER' ? 'Эхлэгч' : course.level === 'INTERMEDIATE' ? 'Дунд' : 'Дэвшилтэт'}
+              <span
+                className={clsx('text-xs px-2.5 py-0.5 rounded-full font-semibold', {
+                  'bg-green-500/20 text-green-400': course.level === 'BEGINNER',
+                  'bg-yellow-500/20 text-yellow-400': course.level === 'INTERMEDIATE',
+                  'bg-red-500/20 text-red-400': course.level === 'ADVANCED',
+                })}
+              >
+                {course.level === 'BEGINNER'
+                  ? 'Эхлэгч'
+                  : course.level === 'INTERMEDIATE'
+                    ? 'Дунд'
+                    : 'Дэвшилтэт'}
               </span>
-              <span className={clsx('text-xs px-2.5 py-0.5 rounded-full font-semibold', {
-                'bg-emerald-500/20 text-emerald-400': course.status === 'PUBLISHED',
-                'bg-slate-500/20 text-slate-400': course.status === 'DRAFT',
-                'bg-orange-500/20 text-orange-400': course.status === 'ARCHIVED',
-              })}>
-                {course.status === 'PUBLISHED' ? 'Нийтлэгдсэн' : course.status === 'DRAFT' ? 'Ноорог' : 'Архивлагдсан'}
+              <span
+                className={clsx('text-xs px-2.5 py-0.5 rounded-full font-semibold', {
+                  'bg-emerald-500/20 text-emerald-400': course.status === 'PUBLISHED',
+                  'bg-slate-500/20 text-slate-400': course.status === 'DRAFT',
+                  'bg-orange-500/20 text-orange-400': course.status === 'ARCHIVED',
+                })}
+              >
+                {course.status === 'PUBLISHED'
+                  ? 'Нийтлэгдсэн'
+                  : course.status === 'DRAFT'
+                    ? 'Ноорог'
+                    : 'Архивлагдсан'}
               </span>
               {course.tags.map((tag) => (
-                <span key={tag} className="text-xs bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full">{tag}</span>
+                <span
+                  key={tag}
+                  className="text-xs bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full"
+                >
+                  {tag}
+                </span>
               ))}
             </div>
 
             {/* Title */}
-            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3 leading-snug">{course.title}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3 leading-snug">
+              {course.title}
+            </h1>
 
             {/* Description */}
             {course.description && (
-              <p className="text-slate-300 leading-relaxed text-sm sm:text-base mb-5 max-w-2xl">{course.description}</p>
+              <p className="text-slate-300 leading-relaxed text-sm sm:text-base mb-5 max-w-2xl">
+                {course.description}
+              </p>
             )}
 
             {/* Stats row */}
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-400">
               {totalLessons > 0 && (
-                <span className="flex items-center gap-1.5"><span>▶</span> {totalLessons} хичээл</span>
+                <span className="flex items-center gap-1.5">
+                  <span>▶</span> {totalLessons} хичээл
+                </span>
               )}
               {course.totalMinutes > 0 && (
-                <span className="flex items-center gap-1.5"><span>⏱</span> {course.totalMinutes}м</span>
+                <span className="flex items-center gap-1.5">
+                  <span>⏱</span> {course.totalMinutes}м
+                </span>
               )}
-              <span className="flex items-center gap-1.5 uppercase"><span>🌐</span> {course.language}</span>
+              <span className="flex items-center gap-1.5 uppercase">
+                <span>🌐</span> {course.language}
+              </span>
               {freeLessons > 0 && (
-                <span className="flex items-center gap-1.5 text-green-400"><span>👁</span> {freeLessons} үнэгүй хичээл</span>
+                <span className="flex items-center gap-1.5 text-green-400">
+                  <span>👁</span> {freeLessons} үнэгүй хичээл
+                </span>
               )}
             </div>
 
@@ -438,9 +501,7 @@ export default function CourseDetailPage() {
           </div>
 
           {/* Mobile-only side card */}
-          <div className="lg:hidden bg-white border-b border-slate-200">
-            {sideCard}
-          </div>
+          <div className="lg:hidden bg-white border-b border-slate-200">{sideCard}</div>
 
           {/* White content area */}
           <div className="bg-white px-6 sm:px-10 py-8 space-y-8">
@@ -450,7 +511,10 @@ export default function CourseDetailPage() {
                 <h2 className="text-xl font-bold text-slate-900 mb-4">Юу сурах вэ</h2>
                 <div className="border border-slate-200 rounded-xl p-6">
                   <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {(course.whatYouLearn?.length > 0 ? course.whatYouLearn : course.modules.map((m: CourseModule) => m.title)).map((item: string, i: number) => (
+                    {(course.whatYouLearn?.length > 0
+                      ? course.whatYouLearn
+                      : course.modules.map((m: CourseModule) => m.title)
+                    ).map((item: string, i: number) => (
                       <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
                         <span className="text-indigo-600 mt-0.5 shrink-0 font-bold">✓</span>
                         <span>{item}</span>
@@ -533,11 +597,16 @@ export default function CourseDetailPage() {
                                 </span>
                                 <div className="flex items-center gap-2 shrink-0">
                                   {lesson.isPreview && (
-                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Үнэгүй</span>
+                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                                      Үнэгүй
+                                    </span>
                                   )}
-                                  {lesson.estimatedMinutes != null && lesson.estimatedMinutes > 0 && (
-                                    <span className="text-xs text-slate-400">{lesson.estimatedMinutes}м</span>
-                                  )}
+                                  {lesson.estimatedMinutes != null &&
+                                    lesson.estimatedMinutes > 0 && (
+                                      <span className="text-xs text-slate-400">
+                                        {lesson.estimatedMinutes}м
+                                      </span>
+                                    )}
                                 </div>
                               </Link>
                             ))
@@ -574,7 +643,9 @@ export default function CourseDetailPage() {
                       <p className="text-sm text-slate-500 mt-0.5">{instructorProfile.headline}</p>
                     )}
                     {instructorProfile.bio && (
-                      <p className="text-sm text-slate-600 mt-2 line-clamp-2">{instructorProfile.bio}</p>
+                      <p className="text-sm text-slate-600 mt-2 line-clamp-2">
+                        {instructorProfile.bio}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -585,9 +656,7 @@ export default function CourseDetailPage() {
 
         {/* RIGHT column — desktop sticky card */}
         <div className="hidden lg:block border-l border-slate-200 bg-white">
-          <div className="sticky top-14">
-            {sideCard}
-          </div>
+          <div className="sticky top-14">{sideCard}</div>
         </div>
       </div>
     </div>

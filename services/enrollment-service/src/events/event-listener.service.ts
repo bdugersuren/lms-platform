@@ -27,12 +27,16 @@ export class EventListenerService {
   @EventPattern(EventTypes.PAYMENT_CONFIRMED)
   async onPaymentConfirmed(@Payload() event: PaymentConfirmedPayload): Promise<void> {
     if (event.purpose !== 'COURSE_PURCHASE') {
-      this.logger.debug(`Skipping enrollment for purpose=${event.purpose} paymentId=${event.paymentId}`);
+      this.logger.debug(
+        `Skipping enrollment for purpose=${event.purpose} paymentId=${event.paymentId}`,
+      );
       return;
     }
 
     if (!event.courseId) {
-      this.logger.warn(`COURSE_PURCHASE event missing courseId, paymentId=${event.paymentId} — skipping`);
+      this.logger.warn(
+        `COURSE_PURCHASE event missing courseId, paymentId=${event.paymentId} — skipping`,
+      );
       return;
     }
 
@@ -40,7 +44,12 @@ export class EventListenerService {
       `Payment confirmed — auto-enrolling userId=${event.userId} courseId=${event.courseId} paymentId=${event.paymentId}`,
     );
     try {
-      await this.enrollmentService.enrollFromPayment(event.userId, event.courseId, event.paymentId);
+      await this.enrollmentService.enrollFromPayment(
+        event.userId,
+        event.courseId,
+        event.paymentId,
+        event.tenantId ?? 'demo',
+      );
     } catch (err) {
       this.logger.error(`Auto-enrollment failed for paymentId=${event.paymentId}`, err);
       await this.eventFailure.record({
@@ -55,51 +64,41 @@ export class EventListenerService {
   }
 
   @EventPattern(CourseContentEventPatterns.PUBLISHED)
-  async onCoursePublished(
-    @Payload() event: CourseContentEventEnvelope,
-  ): Promise<void> {
+  async onCoursePublished(@Payload() event: CourseContentEventEnvelope): Promise<void> {
     await this.courseProjection.handleCourseEvent(event);
   }
 
   @EventPattern(CourseContentEventPatterns.UPDATED)
-  async onCourseUpdated(
-    @Payload() event: CourseContentEventEnvelope,
-  ): Promise<void> {
+  async onCourseUpdated(@Payload() event: CourseContentEventEnvelope): Promise<void> {
     await this.courseProjection.handleCourseEvent(event);
   }
 
   @EventPattern(CourseContentEventPatterns.LESSON_CREATED)
-  async onLessonCreated(
-    @Payload() event: CourseContentEventEnvelope,
-  ): Promise<void> {
+  async onLessonCreated(@Payload() event: CourseContentEventEnvelope): Promise<void> {
     await this.courseProjection.handleCourseEvent(event);
   }
 
   @EventPattern(CourseContentEventPatterns.LESSON_UPDATED)
-  async onLessonUpdated(
-    @Payload() event: CourseContentEventEnvelope,
-  ): Promise<void> {
+  async onLessonUpdated(@Payload() event: CourseContentEventEnvelope): Promise<void> {
     await this.courseProjection.handleCourseEvent(event);
   }
 
   @EventPattern(CourseContentEventPatterns.LESSON_DELETED)
-  async onLessonDeleted(
-    @Payload() event: CourseContentEventEnvelope,
-  ): Promise<void> {
+  async onLessonDeleted(@Payload() event: CourseContentEventEnvelope): Promise<void> {
     await this.courseProjection.handleCourseEvent(event);
   }
 
   @EventPattern(CourseContentEventPatterns.LESSON_REORDERED)
-  async onLessonReordered(
-    @Payload() event: CourseContentEventEnvelope,
-  ): Promise<void> {
+  async onLessonReordered(@Payload() event: CourseContentEventEnvelope): Promise<void> {
     await this.courseProjection.handleCourseEvent(event);
   }
 
   @EventPattern(EventTypes.QUIZ_ATTEMPT_SUBMITTED)
   async onQuizAttemptSubmitted(@Payload() event: QuizAttemptSubmittedPayload): Promise<void> {
     if (!event.courseId) {
-      this.logger.debug(`QUIZ_ATTEMPT_SUBMITTED missing courseId, quizId=${event.quizId} — skipping`);
+      this.logger.debug(
+        `QUIZ_ATTEMPT_SUBMITTED missing courseId, quizId=${event.quizId} — skipping`,
+      );
       return;
     }
     try {
@@ -109,6 +108,7 @@ export class EventListenerService {
         event.quizId,
         event.passed,
         event.score,
+        event.tenantId ?? 'demo',
       );
     } catch (err) {
       this.logger.error(`Failed to record quiz attempt quizId=${event.quizId}`, err);
@@ -125,7 +125,9 @@ export class EventListenerService {
   @EventPattern(EventTypes.ASSIGNMENT_SUBMISSION_GRADED)
   async onAssignmentGraded(@Payload() event: AssignmentSubmissionGradedPayload): Promise<void> {
     if (!event.courseId) {
-      this.logger.debug(`ASSIGNMENT_SUBMISSION_GRADED missing courseId, assignmentId=${event.assignmentId} — skipping`);
+      this.logger.debug(
+        `ASSIGNMENT_SUBMISSION_GRADED missing courseId, assignmentId=${event.assignmentId} — skipping`,
+      );
       return;
     }
     try {
@@ -136,9 +138,13 @@ export class EventListenerService {
         event.passed,
         event.score,
         event.maxScore,
+        event.tenantId ?? 'demo',
       );
     } catch (err) {
-      this.logger.error(`Failed to record assignment grade assignmentId=${event.assignmentId}`, err);
+      this.logger.error(
+        `Failed to record assignment grade assignmentId=${event.assignmentId}`,
+        err,
+      );
       await this.eventFailure.record({
         eventType: EventTypes.ASSIGNMENT_SUBMISSION_GRADED,
         consumer: 'enrollment-service',

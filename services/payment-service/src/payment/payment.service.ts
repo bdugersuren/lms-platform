@@ -31,25 +31,29 @@ export class PaymentService {
     private readonly mockPayment: MockPaymentService,
   ) {}
 
-  async create(userId: string, dto: CreatePaymentDto) {
+  async create(userId: string, dto: CreatePaymentDto, tenantId = 'demo') {
     const purpose = dto.purpose ?? PaymentPurposeDto.COURSE_PURCHASE;
     const isTopup = purpose === PaymentPurposeDto.WALLET_TOPUP;
+    const amount = new Decimal(dto.amount);
 
     if (!isTopup && !dto.courseId) {
       throw new BadRequestException('courseId is required for COURSE_PURCHASE');
     }
+    if (amount.lessThan(1000)) {
+      throw new BadRequestException('Amount must be at least 1000');
+    }
 
     const description =
-      dto.description ??
-      (isTopup ? 'Хэтэвч цэнэглэлт' : `Course payment — ${dto.courseId}`);
+      dto.description ?? (isTopup ? 'Хэтэвч цэнэглэлт' : `Course payment — ${dto.courseId}`);
 
     const payment = await this.prisma.payment.create({
       data: {
         userId,
+        tenantId,
         purpose,
         courseId: isTopup ? null : dto.courseId,
         walletOwnerId: isTopup ? userId : null,
-        amount: new Decimal(dto.amount),
+        amount,
         provider: dto.provider,
         description,
         status: 'PENDING',
@@ -70,12 +74,17 @@ export class PaymentService {
               description: description,
               reference: payment.id,
             },
-            { headers: { 'x-internal-secret': internalSecret }, timeout: 10000 },
+            {
+              headers: { 'x-internal-secret': internalSecret, 'x-tenant-id': tenantId },
+              timeout: 10000,
+            },
           );
         } catch (walletErr: unknown) {
-          const msg = (walletErr as { response?: { data?: { message?: string } } })?.response?.data?.message
-            ?? (walletErr as Error)?.message
-            ?? 'Хэтэвч хасалт амжилтгүй';
+          const msg =
+            (walletErr as { response?: { data?: { message?: string } } })?.response?.data
+              ?.message ??
+            (walletErr as Error)?.message ??
+            'Хэтэвч хасалт амжилтгүй';
           await this.failPayment(payment.id, payment.userId, payment, msg);
           throw new BadRequestException(msg);
         }
@@ -99,7 +108,7 @@ export class PaymentService {
           invoiceCode: isTopup ? 'LMS_TOPUP' : 'LMS_PAYMENT',
           senderInvoiceNo: payment.id,
           invoiceReceiverCode: userId,
-          amount: dto.amount,
+          amount: Number(dto.amount),
           description,
         });
 
@@ -119,7 +128,7 @@ export class PaymentService {
       // SOCIAL_PAY
       const invoice = await this.socialPay.createInvoice({
         invoiceId: payment.id,
-        amount: dto.amount,
+        amount: Number(dto.amount),
         description,
         returnUrl: dto.returnUrl ?? 'http://localhost/payment/result',
       });
@@ -139,8 +148,8 @@ export class PaymentService {
     }
   }
 
-  async findById(id: string, requesterId?: string, isAdmin = false) {
-    const payment = await this.prisma.payment.findUnique({ where: { id } });
+  async findById(id: string, requesterId?: string, isAdmin = false, tenantId = 'demo') {
+    const payment = await this.prisma.payment.findFirst({ where: { id, tenantId } });
     if (!payment) throw new NotFoundException('Payment not found');
     if (requesterId && !isAdmin && payment.userId !== requesterId) {
       throw new ForbiddenException('Access denied');
@@ -148,13 +157,14 @@ export class PaymentService {
     return payment;
   }
 
-  async findMyPayments(userId: string, dto: QueryPaymentDto) {
+  async findMyPayments(userId: string, dto: QueryPaymentDto, tenantId = 'demo') {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
 
     const where = {
       userId,
+      tenantId,
       ...(dto.status ? { status: dto.status } : {}),
     };
 
@@ -171,8 +181,8 @@ export class PaymentService {
     return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
-  async checkPayment(paymentId: string, requesterId?: string) {
-    const payment = await this.findById(paymentId, requesterId);
+  async checkPayment(paymentId: string, requesterId?: string, tenantId = 'demo') {
+    const payment = await this.findById(paymentId, requesterId, false, tenantId);
 
     if (payment.status === 'COMPLETED') return payment;
     if (payment.provider === 'MOCK') return payment;
@@ -221,6 +231,7 @@ export class PaymentService {
         correlationId: paymentId,
         payload: {
           paymentId: updated.id,
+          tenantId: updated.tenantId,
           userId: updated.userId,
           purpose: updated.purpose,
           courseId: updated.courseId ?? undefined,
@@ -241,7 +252,14 @@ export class PaymentService {
   private async failPayment(
     paymentId: string,
     userId: string,
-    payment: { courseId?: string | null; amount: { toString(): string }; currency: string; provider: string; purpose: string },
+    payment: {
+      tenantId?: string;
+      courseId?: string | null;
+      amount: { toString(): string };
+      currency: string;
+      provider: string;
+      purpose: string;
+    },
     reason?: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
@@ -258,6 +276,7 @@ export class PaymentService {
         correlationId: paymentId,
         payload: {
           paymentId,
+          tenantId: payment.tenantId,
           userId,
           courseId: payment.courseId ?? undefined,
           amount: payment.amount.toString(),
@@ -282,11 +301,11 @@ export class PaymentService {
     return result.count;
   }
 
-  async findAll(dto: QueryPaymentDto) {
+  async findAll(dto: QueryPaymentDto, tenantId = 'demo') {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
-    const where = dto.status ? { status: dto.status } : {};
+    const where = { tenantId, ...(dto.status ? { status: dto.status } : {}) };
 
     const [items, total] = await Promise.all([
       this.prisma.payment.findMany({

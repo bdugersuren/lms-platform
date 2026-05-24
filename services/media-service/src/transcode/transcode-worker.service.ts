@@ -3,7 +3,7 @@ import { EventPattern, Payload } from '@nestjs/microservices';
 import { MediaStatus, TranscodeFormat, TranscodeStatus } from '@prisma/client';
 import { mkdirSync, rmSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import * as ffmpeg from 'fluent-ffmpeg';
+import ffmpeg from 'fluent-ffmpeg';
 import { EventTypes } from '@lms/shared-types';
 import { PrismaService } from '../prisma/prisma.service';
 import { MinioService } from '../minio/minio.service';

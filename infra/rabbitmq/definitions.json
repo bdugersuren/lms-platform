@@ -8,12 +8,16 @@
       "name": "lms",
       "password_hash": "Nde9ZPvhVFOc7KIfpJv5geE6z5DYnKHbRZxpOfA6N+CATJXK",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
-      "tags": ["administrator"],
+      "tags": [
+        "administrator"
+      ],
       "limits": {}
     }
   ],
   "vhosts": [
-    { "name": "/" }
+    {
+      "name": "/"
+    }
   ],
   "permissions": [
     {
@@ -59,180 +63,126 @@
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "user.auth-events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "notification.auth-events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "course.events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "course.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "enrollment.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "payment.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "wallet.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "wallet.course-events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "certificate.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "certificate.events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "quiz.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "assignment.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "analytics.events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "notification.events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "user.events",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "media.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "ai.publisher",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "lms.dead-letter",
-        "x-dead-letter-routing-key": "dead"
-      }
+      "arguments": {}
     },
     {
       "name": "lms.events.retry",

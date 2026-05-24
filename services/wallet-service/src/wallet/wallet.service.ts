@@ -1,11 +1,7 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { assertPositiveMoney } from '@lms/shared-money';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagingService } from '../messaging/messaging.service';
 
@@ -18,18 +14,20 @@ export class WalletService {
     private readonly messaging: MessagingService,
   ) {}
 
-  async getOrCreate(ownerId: string, ownerType = 'USER') {
-    const existing = await this.prisma.wallet.findUnique({ where: { ownerId } });
+  async getOrCreate(ownerId: string, ownerType = 'USER', tenantId = 'demo') {
+    const existing = await this.prisma.wallet.findUnique({
+      where: { tenantId_ownerId: { tenantId, ownerId } },
+    });
     if (existing) return existing;
 
     return this.prisma.wallet.create({
-      data: { ownerId, ownerType, currency: 'MNT' },
+      data: { tenantId, ownerId, ownerType, currency: 'MNT' },
     });
   }
 
-  async findByOwner(ownerId: string) {
+  async findByOwner(ownerId: string, tenantId = 'demo') {
     const wallet = await this.prisma.wallet.findUnique({
-      where: { ownerId },
+      where: { tenantId_ownerId: { tenantId, ownerId } },
       include: {
         _count: { select: { transactions: true, payouts: true } },
       },
@@ -47,20 +45,24 @@ export class WalletService {
   /** Atomic credit — increases balance, records transaction. */
   async credit(
     ownerId: string,
-    amount: number,
+    amount: number | string,
     description: string,
     type: 'CREDIT' | 'WALLET_TOPUP' | 'REVENUE_SHARE' | 'REFUND' | 'ADMIN_ADJUSTMENT' = 'CREDIT',
     reference?: string,
+    tenantId = 'demo',
   ) {
-    if (amount <= 0) throw new BadRequestException('Amount must be positive');
+    const money = assertPositiveMoney(amount);
 
     return this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({ where: { ownerId } });
+      const wallet = await tx.wallet.findUnique({
+        where: { tenantId_ownerId: { tenantId, ownerId } },
+      });
       if (!wallet) throw new NotFoundException('Wallet not found');
       if (wallet.status !== 'ACTIVE') throw new BadRequestException('Wallet is not active');
 
       const balanceBefore = wallet.balance;
-      const balanceAfter = new Decimal(wallet.balance.toString()).plus(amount);
+      const decimalAmount = new Decimal(money);
+      const balanceAfter = new Decimal(wallet.balance.toString()).plus(decimalAmount);
 
       await tx.wallet.update({
         where: { id: wallet.id },
@@ -73,7 +75,7 @@ export class WalletService {
             walletId: wallet.id,
             type,
             status: 'COMPLETED',
-            amount: new Decimal(amount),
+            amount: decimalAmount,
             balanceBefore,
             balanceAfter,
             description,
@@ -86,7 +88,9 @@ export class WalletService {
           err.code === 'P2002' &&
           reference
         ) {
-          this.logger.warn(`Duplicate credit reference=${reference} — returning existing transaction (idempotent)`);
+          this.logger.warn(
+            `Duplicate credit reference=${reference} — returning existing transaction (idempotent)`,
+          );
           return tx.transaction.findUniqueOrThrow({ where: { reference } });
         }
         throw err;
@@ -97,24 +101,28 @@ export class WalletService {
   /** Atomic debit — decreases balance, records transaction. */
   async debit(
     ownerId: string,
-    amount: number,
+    amount: number | string,
     description: string,
     type: 'DEBIT' | 'PAYOUT' | 'PLATFORM_FEE' | 'ADMIN_ADJUSTMENT' = 'DEBIT',
     reference?: string,
+    tenantId = 'demo',
   ) {
-    if (amount <= 0) throw new BadRequestException('Amount must be positive');
+    const money = assertPositiveMoney(amount);
 
     return this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({ where: { ownerId } });
+      const wallet = await tx.wallet.findUnique({
+        where: { tenantId_ownerId: { tenantId, ownerId } },
+      });
       if (!wallet) throw new NotFoundException('Wallet not found');
       if (wallet.status !== 'ACTIVE') throw new BadRequestException('Wallet is not active');
 
       const balanceBefore = new Decimal(wallet.balance.toString());
-      if (balanceBefore.lessThan(amount)) {
+      const decimalAmount = new Decimal(money);
+      if (balanceBefore.lessThan(decimalAmount)) {
         throw new BadRequestException('Insufficient balance');
       }
 
-      const balanceAfter = balanceBefore.minus(amount);
+      const balanceAfter = balanceBefore.minus(decimalAmount);
 
       await tx.wallet.update({
         where: { id: wallet.id },
@@ -126,7 +134,7 @@ export class WalletService {
           walletId: wallet.id,
           type,
           status: 'COMPLETED',
-          amount: new Decimal(amount),
+          amount: decimalAmount,
           balanceBefore,
           balanceAfter,
           description,

@@ -108,7 +108,7 @@ export default function PaymentsPage() {
                         <span className={clsx('text-xs font-semibold', pm.color)}>{pm.label}</span>
                       </div>
                       <p className="text-sm text-gray-500 truncate">
-                        {payment.description ?? `Курс: ${payment.courseId.slice(0, 8)}…`}
+                        {payment.description ?? (payment.courseId ? `Курс: ${payment.courseId.slice(0, 8)}…` : 'Дэлгэрэнгүй байхгүй')}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
                         {new Date(payment.createdAt).toLocaleString('mn-MN')}

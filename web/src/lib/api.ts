@@ -11,11 +11,13 @@ function getTenantSlugFromHost(): string | null {
   if (typeof window === 'undefined') return null;
   const hostname = window.location.hostname;
   const platformDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN ?? 'platform.mn';
-  if (hostname === 'localhost' || hostname.includes('127.0.0.1')) return null;
+  const defaultTenant = process.env.NEXT_PUBLIC_DEFAULT_TENANT_SLUG ?? 'demo';
+  if (hostname === 'localhost' || hostname.includes('127.0.0.1')) return defaultTenant;
+  if (hostname === platformDomain || hostname === `www.${platformDomain}`) return 'www';
   if (hostname.endsWith(`.${platformDomain}`)) {
-    return hostname.slice(0, -(platformDomain.length + 1));
+    return hostname.slice(0, -(platformDomain.length + 1)) || defaultTenant;
   }
-  return null;
+  return `__domain__:${hostname}`;
 }
 
 api.interceptors.request.use((config) => {

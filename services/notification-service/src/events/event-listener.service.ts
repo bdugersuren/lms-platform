@@ -35,7 +35,7 @@ interface CourseEnrolledEvent {
 interface PaymentEvent {
   userId: string;
   email?: string;
-  amount: number;
+  amount: string;
   currency?: string;
 }
 

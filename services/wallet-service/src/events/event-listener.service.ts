@@ -38,13 +38,15 @@ export class EventListenerService {
     );
 
     try {
-      await this.walletService.getOrCreate(userId);
+      const tenantId = event.tenantId ?? 'demo';
+      await this.walletService.getOrCreate(userId, 'USER', tenantId);
       await this.walletService.credit(
         userId,
-        parseFloat(event.amount),
+        event.amount,
         'Хэтэвч цэнэглэлт',
         'WALLET_TOPUP',
         `payment:${event.paymentId}`,
+        tenantId,
       );
       this.logger.log(`Wallet credited for paymentId=${event.paymentId}`);
     } catch (err) {
@@ -69,13 +71,15 @@ export class EventListenerService {
       const course = await this.courseProjection.findCourse(event.courseId);
 
       if (!course) {
-        this.logger.warn(`CourseProjection not found for courseId=${event.courseId} — skipping revenue`);
+        this.logger.warn(
+          `CourseProjection not found for courseId=${event.courseId} — skipping revenue`,
+        );
         return;
       }
 
-      const grossAmount = parseFloat(course.price.toString());
+      const grossAmount = course.price.toString();
 
-      if (grossAmount <= 0) {
+      if (Number(grossAmount) <= 0) {
         this.logger.debug(`Course ${event.courseId} is free — skipping revenue distribution`);
         return;
       }
@@ -85,6 +89,7 @@ export class EventListenerService {
         event.courseId,
         event.enrollmentId,
         grossAmount,
+        event.tenantId ?? course.tenantId ?? 'demo',
       );
 
       this.logger.log(

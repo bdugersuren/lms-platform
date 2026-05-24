@@ -11,7 +11,13 @@ export type TransactionType =
 
 export type PaymentProvider = 'QPAY' | 'SOCIAL_PAY' | 'MOCK' | 'WALLET';
 export type PaymentPurpose = 'COURSE_PURCHASE' | 'WALLET_TOPUP';
-export type PaymentStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
+export type PaymentStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'REFUNDED'
+  | 'CANCELLED';
 
 export interface Payment {
   id: string;
@@ -36,7 +42,7 @@ export interface Payment {
 
 export interface CreateTopupDto {
   purpose: 'WALLET_TOPUP';
-  amount: number;
+  amount: string;
   provider: PaymentProvider;
   returnUrl?: string;
 }
@@ -83,9 +89,10 @@ export interface RevenueShare {
 }
 
 export interface RevenueSummary {
-  totalGross: string | number;
-  totalPlatformFee: string | number;
-  totalNet: string | number;
+  totalGross: string;
+  totalPlatformFee: string;
+  totalNet: string;
+  feePercent: string;
   enrollmentCount: number;
 }
 
@@ -114,7 +121,7 @@ export interface Paginated<T> {
 }
 
 export interface CreatePayoutDto {
-  amount: number;
+  amount: string;
   bankName?: string;
   accountNumber?: string;
   accountName?: string;

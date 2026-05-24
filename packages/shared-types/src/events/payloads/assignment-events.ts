@@ -1,5 +1,6 @@
 export interface AssignmentSubmissionGradedPayload {
   submissionId: string;
+  tenantId?: string;
   assignmentId: string;
   studentId: string;
   courseId?: string;

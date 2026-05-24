@@ -14,6 +14,8 @@ const C = {
   COURSE_3: 'c0000001-0000-0000-0000-000000000003',
 };
 
+const TENANT_ID = 'demo';
+
 // Lesson IDs from course-service seed
 const LESSONS_C1 = [
   'l1000001-0000-0000-0000-000000000001',
@@ -35,10 +37,11 @@ async function main() {
 
   // student1 → course1 (fully completed)
   const enr1 = await prisma.enrollment.upsert({
-    where: { courseId_studentId: { courseId: C.COURSE_1, studentId: U.STUDENT_1 } },
+    where: { tenantId_courseId_studentId: { tenantId: TENANT_ID, courseId: C.COURSE_1, studentId: U.STUDENT_1 } },
     update: {},
     create: {
       id: 'e0000001-0000-0000-0000-000000000001',
+      tenantId: TENANT_ID,
       courseId: C.COURSE_1,
       studentId: U.STUDENT_1,
       progressPercent: 100,
@@ -69,10 +72,11 @@ async function main() {
 
   // student1 → course2 (in progress)
   const enr2 = await prisma.enrollment.upsert({
-    where: { courseId_studentId: { courseId: C.COURSE_2, studentId: U.STUDENT_1 } },
+    where: { tenantId_courseId_studentId: { tenantId: TENANT_ID, courseId: C.COURSE_2, studentId: U.STUDENT_1 } },
     update: {},
     create: {
       id: 'e0000001-0000-0000-0000-000000000002',
+      tenantId: TENANT_ID,
       courseId: C.COURSE_2,
       studentId: U.STUDENT_1,
       progressPercent: 50,
@@ -102,10 +106,11 @@ async function main() {
 
   // student2 → course1 (enrolled, not started)
   await prisma.enrollment.upsert({
-    where: { courseId_studentId: { courseId: C.COURSE_1, studentId: U.STUDENT_2 } },
+    where: { tenantId_courseId_studentId: { tenantId: TENANT_ID, courseId: C.COURSE_1, studentId: U.STUDENT_2 } },
     update: {},
     create: {
       id: 'e0000001-0000-0000-0000-000000000003',
+      tenantId: TENANT_ID,
       courseId: C.COURSE_1,
       studentId: U.STUDENT_2,
       progressPercent: 0,
@@ -117,10 +122,11 @@ async function main() {
 
   // student3 → course3 (enrolled)
   await prisma.enrollment.upsert({
-    where: { courseId_studentId: { courseId: C.COURSE_3, studentId: U.STUDENT_3 } },
+    where: { tenantId_courseId_studentId: { tenantId: TENANT_ID, courseId: C.COURSE_3, studentId: U.STUDENT_3 } },
     update: {},
     create: {
       id: 'e0000001-0000-0000-0000-000000000004',
+      tenantId: TENANT_ID,
       courseId: C.COURSE_3,
       studentId: U.STUDENT_3,
       progressPercent: 0,
