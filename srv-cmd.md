@@ -1,6 +1,8 @@
 # LMS Platform Server Setup Commands
 
-Энэ файл нь project-ийг шинэ Linux server дээр Docker Compose ашиглан суурилуулах, тохируулах, migration/seed хийх үндсэн дараалал юм.
+Энэ файл нь project-ийг GitHub-аас татаж шинэ Linux server дээр Docker Compose ашиглан суурилуулах, тохируулах, migration/seed хийх үндсэн дараалал юм.
+
+**Repository:** `https://github.com/bdugersuren/lms-platform.git`
 
 ## 1. Server Бэлтгэх
 
@@ -28,14 +30,14 @@ Project байрлуулах хавтас руу орно.
 cd /opt
 ```
 
-Repository-г clone хийнэ.
+GitHub-аас clone хийнэ.
 
 ```bash
-git clone <YOUR_REPOSITORY_URL> lms-platform
+git clone https://github.com/bdugersuren/lms-platform.git lms-platform
 cd /opt/lms-platform
 ```
 
-Хэрвээ zip/scp-аар хуулж байгаа бол project root нь дараах байдалтай байх ёстой.
+Clone хийсний дараа project root дараах байдалтай байна:
 
 ```text
 /opt/lms-platform
@@ -45,6 +47,8 @@ cd /opt/lms-platform
   services/
   gateway/
   web/
+  packages/
+  infra/
 ```
 
 ## 3. Environment Тохируулах
@@ -81,16 +85,25 @@ openssl rand -hex 32
 
 Анхаарах зүйл: `.env` доторх `RABBITMQ_DEFAULT_PASS` болон `RABBITMQ_URL` дахь password заавал ижил байна.
 
-MinIO presigned URL-ийн тохиргоо (browser-аас шууд upload хийхэд ашиглана):
+**Domain тохиргоо (МАШ ЧУХАЛ)** — `PLATFORM_DOMAIN` болон `ALLOWED_ORIGINS`-г өөрийн домэйнд тохируулна:
+
+```env
+# Gateway: энэ домэйнг үндсэн платформ гэж таних → demo tenant руу хандуулна
+PLATFORM_DOMAIN=know.mn
+DEFAULT_TENANT_SLUG=demo
+
+# Browser CORS-д зөвшөөрөх origin-ууд
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://know.mn,https://know.mn
+```
+
+MinIO presigned URL-ийн тохиргоо — domain-аар солино:
 
 ```env
 MINIO_BUCKET=lms-media
-MINIO_PUBLIC_URL=http://localhost:9000
-# Production дээр domain-аар солино, жишээ нь: https://media.example.com/minio-store
-MINIO_PUBLIC_STORE_URL=http://localhost/minio-store
+MINIO_PUBLIC_STORE_URL=http://know.mn/minio-store
 ```
 
-> **Тайлбар:** Browser-аас MinIO руу шууд PUT хийх presigned URL-ийн CORS-ийг nginx `/minio-store/` proxy дамжуулан шийдсэн тул MinIO-д тусдаа CORS тохиргоо хийх шаардлагагүй.
+> **Тайлбар:** `PLATFORM_DOMAIN` тохируулаагүй бол gateway нь `know.mn`-г танихгүй тул login 401 буцаана. `.env.example`-д аль хэдийн `know.mn`-р тохируулагдсан.
 
 ## 4. Runtime Volume Хавтас Бэлтгэх
 
@@ -256,9 +269,9 @@ student1@know.mn / Student!1234   (student, tenant: demo)
 
 > **Анхаарах:** Seed credentials нь `prisma/seed.ts` файлаас хамаарна. Seed дахин ажиллуулбал давхардахгүй (idempotent).
 
-## 12. Нэгтгэсэн Full Setup Дараалал
+## 12. Хурдан Дараалал (Хэрвээ clone хийгдсэн бол)
 
-Шинэ server дээр хамгийн түгээмэл дараалал:
+Repo аль хэдийн `/opt/lms-platform`-д байгаа үед environment болон volume бэлтгэж хурдан ажиллуулах:
 
 ```bash
 cd /opt/lms-platform
@@ -283,7 +296,99 @@ curl http://localhost/
 curl http://localhost/api/health
 ```
 
-## 13. Log, Status, Restart Командууд
+## 13. GitHub → Server: Бүрэн Дараалал (Анхны Байршуулалт)
+
+Шинэ Linux server дээр GitHub-аас татаж, бүрэн байршуулах дараалал:
+
+```bash
+# 1. Server бэлтгэх
+sudo apt update && sudo apt upgrade -y
+
+# Docker суусан эсэхийг шалгана (суугаагүй бол Official guide-аар суулгана)
+docker --version
+docker compose version
+
+# 2. Project байрлуулах
+cd /opt
+git clone https://github.com/bdugersuren/lms-platform.git lms-platform
+cd /opt/lms-platform
+
+# 3. Environment тохируулах
+cp .env.example .env
+nano .env
+# Заавал солих: POSTGRES_PASSWORD, JWT_SECRET, JWT_REFRESH_SECRET, RABBITMQ_DEFAULT_PASS
+# Production domain бол MINIO_PUBLIC_STORE_URL=http://YOUR_DOMAIN/minio-store
+
+# 4. Runtime volume хавтас үүсгэх
+mkdir -p VOLUMES/postgres/data VOLUMES/redis/data VOLUMES/rabbitmq/data VOLUMES/minio/data VOLUMES/ollama/data
+
+# 5. Infrastructure эхлүүлэх (MinIO bucket mc-init автомат үүсгэнэ)
+docker compose up -d postgres redis rabbitmq minio
+
+# Postgres/RabbitMQ ready болтол 15-20 секунд хүлээнэ
+sleep 20
+
+# 6. Бүх backend + frontend build хийж асаах
+docker compose --profile core --profile learn --profile finance --profile ops --profile frontend up -d --build
+
+# 7. Database migration ажиллуулах
+bash scripts/docker-migrate.sh
+
+# 8. Seed data оруулах
+bash scripts/docker-seed.sh
+
+# 9. Шалгах
+docker compose ps
+curl http://localhost/api/health
+```
+
+Амжилттай бол `/api/health` → `{"status":"ok"}` буцаана.
+
+Login шалгах:
+
+```bash
+curl -s -X POST http://localhost/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@know.mn","password":"Admin!1234","tenantSlug":"demo"}' \
+  | jq '.accessToken'
+```
+
+---
+
+## 14. Шинэчлэлт (Git Pull → Rebuild)
+
+GitHub дээр шинэ commit орсон үед server дээр шинэчлэх дараалал:
+
+```bash
+cd /opt/lms-platform
+
+# 1. Шинэ код татах
+git pull origin main
+
+# 2. Container-үүдийг rebuild хийж шинэчлэх
+docker compose --profile core --profile learn --profile finance --profile ops --profile frontend up -d --build
+
+# 3. Шинэ migration байвал ажиллуулах (schema өөрчлөгдсөн үед)
+bash scripts/docker-migrate.sh
+
+# 4. Status шалгах
+docker compose ps
+curl http://localhost/api/health
+```
+
+> **Анхаарах:** `--build` flag нь зөвхөн өөрчлөгдсөн service-ийн image-ийг rebuild хийдэг. `VOLUMES/` доторх өгөгдөл хэвэндээ үлдэнэ.
+
+Тодорхой нэг service-ийг л шинэчлэх бол:
+
+```bash
+# Жишээ нь зөвхөн gateway шинэчлэх
+docker compose up -d --build gateway
+docker compose logs -f gateway
+```
+
+---
+
+## 15. Log, Status, Restart Командууд
 
 Бүх container status:
 
@@ -315,7 +420,7 @@ Rebuild хийх:
 docker compose --profile core --profile learn --profile finance --profile ops --profile frontend up -d --build
 ```
 
-## 14. Зогсоох Командууд
+## 16. Зогсоох Командууд
 
 Container-үүдийг зогсоох:
 
@@ -327,7 +432,7 @@ docker compose --profile core --profile learn --profile finance --profile ops --
 
 Container болон local bind-mounted өгөгдлийг хамт устгах шаардлагатай бол `VOLUMES/` хавтсыг гараар устгана. Production server дээр үүнийг backup-гүй хийхгүй.
 
-## 15. Backup Жишээ
+## 17. Backup Жишээ
 
 PostgreSQL dump авах:
 
@@ -348,7 +453,7 @@ tar -czf backups/minio-data.tar.gz VOLUMES/minio/data
 tar -czf backups/volumes-all.tar.gz VOLUMES
 ```
 
-## 16. Нийтлэг Асуудал
+## 18. Нийтлэг Асуудал
 
 **Postgres холбогдохгүй бол:**
 

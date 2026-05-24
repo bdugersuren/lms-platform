@@ -92,10 +92,21 @@ async function main(): Promise<void> {
 
   await prisma.tenantDomain.upsert({
     where: { domain: 'demo.platform.mn' },
-    update: { tenantId: tenant.id, isPrimary: true },
+    update: { tenantId: tenant.id, isPrimary: false },
     create: {
       tenantId: tenant.id,
       domain: 'demo.platform.mn',
+      isPrimary: false,
+      verifiedAt: new Date(),
+    },
+  });
+
+  await prisma.tenantDomain.upsert({
+    where: { domain: 'know.mn' },
+    update: { tenantId: tenant.id, isPrimary: true },
+    create: {
+      tenantId: tenant.id,
+      domain: 'know.mn',
       isPrimary: true,
       verifiedAt: new Date(),
     },
@@ -124,7 +135,7 @@ async function main(): Promise<void> {
     },
   });
 
-  console.log('Tenant seed complete: demo');
+  console.log('Tenant seed complete: demo (domains: know.mn, demo.platform.mn)');
 }
 
 main()
