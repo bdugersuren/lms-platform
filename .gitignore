@@ -50,3 +50,10 @@ coverage/
 *.pid
 *.pid.lock
 pnpm-lock.yaml
+
+# Next.js build output
+web/.next/
+web/out/
+
+# Build artifacts
+dist/
