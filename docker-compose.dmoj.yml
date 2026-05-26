@@ -1,84 +1,109 @@
 # =============================================================================
 # DMOJ Online Judge — Docker Compose
+# Images source-аас build хийгддэг (ninjaclasher pattern)
 #
-# Prerequisites:
-#   1. LMS stack must be running with lms-net created:
-#      docker compose up -d
-#   2. Copy env file:  cp .env.dmoj.example .env.dmoj
-#   3. Start DMOJ:     docker compose -f docker-compose.dmoj.yml --env-file .env.dmoj up -d
+# Эхний удаа тохируулах:
+#   bash scripts/setup-dmoj.sh          # DMOJ repo clone хийх
+#   cp .env.dmoj.example .env.dmoj      # нууц үгнүүдийг тохируулах
+#   cp infra/dmoj/environment/mysql.env.example     infra/dmoj/environment/mysql.env
+#   cp infra/dmoj/environment/mysql-admin.env.example infra/dmoj/environment/mysql-admin.env
+#   cp infra/dmoj/environment/site.env.example      infra/dmoj/environment/site.env
 #
-# DMOJ site will be accessible at: http://127.0.0.1:8081
-# Admin UI: http://127.0.0.1:8081/admin  (admin / see DMOJ_ADMIN_PASSWORD)
+# Build:
+#   docker compose -f docker-compose.dmoj.yml --env-file .env.dmoj build
+#
+# Эхлүүлэх (LMS stack аль хэдийн running байх ёстой):
+#   docker compose up -d                              # lms-net үүсгэх
+#   docker compose -f docker-compose.dmoj.yml --env-file .env.dmoj up -d
+#
+# Нэг удаагийн setup:
+#   docker exec dmoj-site python manage.py migrate
+#   docker exec dmoj-site python manage.py collectstatic --no-input
+#   docker exec -it dmoj-site python manage.py createsuperuser
+#
+# DMOJ UI:  http://127.0.0.1:8081
 # =============================================================================
 
 networks:
   lms-net:
     external: true
     name: lms-net
-  dmoj-internal:
+  dmoj-site:
+    driver: bridge
+  dmoj-db-net:
+    driver: bridge
+  dmoj-nginx:
     driver: bridge
 
 volumes:
   dmoj-db-data:
+  dmoj-redis-data:
+  dmoj-assets:
+  dmoj-pdfcache:
+  dmoj-datacache:
   dmoj-cache:
+  dmoj-media:
   dmoj-problems:
   dmoj-submissions:
 
 services:
 
-  # ── MariaDB (DMOJ internal DB) ──────────────────────────────────────────────
+  # ── MySQL 8.0 ──────────────────────────────────────────────────────────────
   dmoj-db:
-    image: mariadb:10.11
+    image: mysql:8.0
     container_name: dmoj-db
     restart: unless-stopped
-    networks:
-      - dmoj-internal
+    networks: [dmoj-db-net]
+    env_file:
+      - infra/dmoj/environment/mysql.env
+      - infra/dmoj/environment/mysql-admin.env
     environment:
-      MYSQL_ROOT_PASSWORD: ${DMOJ_DB_ROOT_PASSWORD:-dmoj_root}
       MYSQL_DATABASE: dmoj
-      MYSQL_USER: dmoj
-      MYSQL_PASSWORD: ${DMOJ_DB_PASSWORD:-dmoj_pass}
     volumes:
       - dmoj-db-data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "dmoj", "--password=${DMOJ_DB_PASSWORD:-dmoj_pass}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
-  # ── Redis (DMOJ internal cache/channel layer) ────────────────────────────────
+  # ── Redis ──────────────────────────────────────────────────────────────────
   dmoj-redis:
-    image: redis:7-alpine
+    image: redis:alpine
     container_name: dmoj-redis
     restart: unless-stopped
-    networks:
-      - dmoj-internal
+    networks: [dmoj-site]
+    volumes:
+      - dmoj-redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
 
-  # ── DMOJ Site (Django web app) ───────────────────────────────────────────────
+  # ── DMOJ Site (Django) ─────────────────────────────────────────────────────
   dmoj-site:
-    image: dmoj/site:latest
+    build:
+      context: ./infra/dmoj/
+      dockerfile: docker/site/Dockerfile
+    image: lms-dmoj-site
     container_name: dmoj-site
+    init: true
     restart: unless-stopped
-    networks:
-      - lms-net
-      - dmoj-internal
-    ports:
-      - "127.0.0.1:8081:8000"
-    environment:
-      DATABASE_URL: mysql://dmoj:${DMOJ_DB_PASSWORD:-dmoj_pass}@dmoj-db/dmoj
-      REDIS_URL: redis://dmoj-redis:6379/0
-      SECRET_KEY: ${DMOJ_SECRET_KEY}
-      ALLOWED_HOSTS: ${DMOJ_ALLOWED_HOSTS:-localhost,127.0.0.1,dmoj-site}
-      DEBUG: ${DMOJ_DEBUG:-0}
+    networks: [dmoj-site, dmoj-db-net, dmoj-nginx, lms-net]
+    env_file:
+      - infra/dmoj/environment/mysql.env
+      - infra/dmoj/environment/site.env
     volumes:
-      - dmoj-problems:/problems
-      - dmoj-submissions:/submissions
+      - dmoj-assets:/assets/
+      - dmoj-pdfcache:/pdfcache/
+      - dmoj-datacache:/datacache/
+      - dmoj-cache:/cache/
+      - dmoj-media:/media/
+      - dmoj-problems:/problems/
+      - dmoj-submissions:/submissions/
       - ./infra/dmoj/local_settings.py:/site/dmoj/local_settings.py:ro
     depends_on:
       dmoj-db:
@@ -86,60 +111,102 @@ services:
       dmoj-redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/languages"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s
+      start_period: 120s
 
-  # ── Celery worker (async tasks) ───────────────────────────────────────────────
+  # ── Celery worker ─────────────────────────────────────────────────────────
   dmoj-celery:
-    image: dmoj/site:latest
+    build:
+      context: ./infra/dmoj/
+      dockerfile: docker/site/Dockerfile
+    image: lms-dmoj-site
     container_name: dmoj-celery
+    init: true
     restart: unless-stopped
-    networks:
-      - dmoj-internal
+    networks: [dmoj-site, dmoj-db-net]
     command: celery -A dmoj worker -l info
-    environment:
-      DATABASE_URL: mysql://dmoj:${DMOJ_DB_PASSWORD:-dmoj_pass}@dmoj-db/dmoj
-      REDIS_URL: redis://dmoj-redis:6379/0
-      SECRET_KEY: ${DMOJ_SECRET_KEY}
+    env_file:
+      - infra/dmoj/environment/mysql.env
+      - infra/dmoj/environment/site.env
     volumes:
-      - dmoj-problems:/problems
-      - dmoj-submissions:/submissions
+      - dmoj-pdfcache:/pdfcache/
+      - dmoj-datacache:/datacache/
+      - dmoj-problems:/problems/
       - ./infra/dmoj/local_settings.py:/site/dmoj/local_settings.py:ro
     depends_on:
       dmoj-site:
         condition: service_healthy
 
+  # ── WebSocket Event Server ─────────────────────────────────────────────────
+  dmoj-wsevent:
+    build:
+      context: ./infra/dmoj/
+      dockerfile: docker/wsevent/Dockerfile
+    image: lms-dmoj-wsevent
+    container_name: dmoj-wsevent
+    init: true
+    restart: unless-stopped
+    networks: [dmoj-site, dmoj-nginx]
+
   # ── Bridged judge daemon ────────────────────────────────────────────────────
   dmoj-bridged:
-    image: dmoj/judge-base:latest
+    build:
+      context: ./infra/dmoj/
+      dockerfile: docker/site/Dockerfile
+    image: lms-dmoj-site
     container_name: dmoj-bridged
+    init: true
     restart: unless-stopped
-    networks:
-      - dmoj-internal
-    command: ["python", "-m", "dmoj.judge", "--host", "dmoj-site", "--port", "9999"]
-    environment:
-      BRIDGED_HOST: 0.0.0.0
-      BRIDGED_PORT: 9999
+    networks: [dmoj-site, dmoj-db-net]
+    command: python manage.py runbridged
+    env_file:
+      - infra/dmoj/environment/mysql.env
+      - infra/dmoj/environment/site.env
+    volumes:
+      - dmoj-pdfcache:/pdfcache/
+      - dmoj-problems:/problems/
+      - ./infra/dmoj/local_settings.py:/site/dmoj/local_settings.py:ro
+    ports:
+      - "9999:9999"
     depends_on:
       dmoj-site:
         condition: service_healthy
 
-  # ── Judge worker ────────────────────────────────────────────────────────────
+  # ── Judge worker ───────────────────────────────────────────────────────────
   dmoj-judge:
-    image: dmoj/judge-tier1:latest
+    build:
+      context: ./infra/dmoj/docker/judge/
+      dockerfile: Dockerfile
+    image: lms-dmoj-judge
     container_name: dmoj-judge
     restart: unless-stopped
-    networks:
-      - dmoj-internal
+    networks: [dmoj-site]
     environment:
-      JUDGE_SERVER_HOST: dmoj-bridged
-      JUDGE_SERVER_PORT: 9999
       JUDGE_KEY: ${DMOJ_JUDGE_KEY:-lms-judge-01}
+      JUDGE_SHARED_SECRET: ${JUDGE_SERVER_SHARED_SECRET:-lms-judge-secret}
+      BRIDGE_HOST: dmoj-bridged
+      BRIDGE_PORT: 9999
     volumes:
       - dmoj-problems:/problems
     depends_on:
       - dmoj-bridged
     privileged: true
+
+  # ── Nginx ──────────────────────────────────────────────────────────────────
+  dmoj-nginx:
+    image: nginx:alpine
+    container_name: dmoj-nginx
+    restart: unless-stopped
+    networks: [dmoj-nginx]
+    ports:
+      - "127.0.0.1:8081:80"
+    volumes:
+      - dmoj-assets:/assets/:ro
+      - dmoj-media:/media/:ro
+      - ./infra/dmoj/nginx/conf.d/:/etc/nginx/conf.d/:ro
+    depends_on:
+      - dmoj-site
+      - dmoj-wsevent
