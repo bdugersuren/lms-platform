@@ -29,6 +29,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
         JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
         ALLOWED_ORIGINS: Joi.string().default('http://localhost:3000'),
         AUTH_SERVICE_URL: Joi.string().uri().required(),
+        CODING_SERVICE_URL: Joi.string().uri().optional(),
       }),
       validationOptions: { allowUnknown: true, abortEarly: false },
     }),

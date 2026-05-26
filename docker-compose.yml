@@ -105,6 +105,7 @@ x-minio-env: &minio-env
 # ── Networks ─────────────────────────────────────────────────────────────────
 networks:
   lms-net:
+    name: lms-net
     driver: bridge
     # Disable ICC (inter-container communication) for services that don't need it.
     # All legitimate traffic flows through declared depends_on links.
@@ -451,6 +452,32 @@ services:
       <<: *infra-depends
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:3006/api/health"]
+      <<: *nestjs-healthcheck
+
+  coding-service:
+    build:
+      <<: *nestjs-build
+      dockerfile: services/coding-service/Dockerfile
+    container_name: lms-coding-service
+    <<: *nestjs-common
+    profiles: [learn]
+    environment:
+      <<: *nestjs-env
+      PORT: ${CODING_PORT:-3017}
+      DATABASE_URL: ${CODING_DATABASE_URL}
+      ASSIGNMENT_SERVICE_URL: ${ASSIGNMENT_SERVICE_URL:-http://lms-assignment-service:3006}
+      ENROLLMENT_SERVICE_URL: ${ENROLLMENT_SERVICE_URL:-http://lms-enrollment-service:3005}
+      DMOJ_BASE_URL: ${DMOJ_BASE_URL:-http://dmoj-site:8000}
+      DMOJ_INTERNAL_SECRET: ${DMOJ_INTERNAL_SECRET}
+      DMOJ_RESULT_SYNC_INTERVAL_MS: ${DMOJ_RESULT_SYNC_INTERVAL_MS:-5000}
+      CODING_SERVICE_ACCOUNT_EMAIL: ${CODING_SERVICE_ACCOUNT_EMAIL}
+      CODING_SERVICE_ACCOUNT_PASSWORD: ${CODING_SERVICE_ACCOUNT_PASSWORD}
+    ports:
+      - "127.0.0.1:3017:3017"
+    depends_on:
+      <<: *infra-depends
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3017/api/health"]
       <<: *nestjs-healthcheck
 
   # ────────────────────────────────────────────────────────────────────────────

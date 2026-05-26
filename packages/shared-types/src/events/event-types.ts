@@ -27,6 +27,11 @@ export const EventTypes = {
   MEDIA_TRANSCODE_FAILED:          'media.transcode.failed',
   // Audit
   AUDIT_ACTION_PERFORMED:          'audit.action.performed',
+  // Coding (DMOJ judge)
+  CODING_SUBMISSION_QUEUED:        'coding.submission.queued',
+  CODING_SUBMISSION_JUDGING:       'coding.submission.judging',
+  CODING_SUBMISSION_GRADED:        'coding.submission.graded',
+  CODING_SUBMISSION_FAILED:        'coding.submission.failed',
 } as const;
 
 export type EventType = (typeof EventTypes)[keyof typeof EventTypes];

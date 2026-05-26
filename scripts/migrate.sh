@@ -28,6 +28,7 @@ SERVICES=(
   "services/media-service"
   "services/certificate-service"
   "services/analytics-service"
+  "services/coding-service"
 )
 
 FAILED=()

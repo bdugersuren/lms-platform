@@ -38,6 +38,7 @@ SERVICES=(
   "services/media-service:media_db"
   "services/certificate-service:certificate_db"
   "services/analytics-service:analytics_db"
+  "services/coding-service:coding_db"
 )
 
 FAILED=()

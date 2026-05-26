@@ -142,6 +142,7 @@ run_migration "certificate-service"  "services/certificate-service"  "certificat
 run_migration "notification-service" "services/notification-service" "notification_db"
 run_migration "analytics-service"    "services/analytics-service"    "analytics_db"
 run_migration "audit-service"        "services/audit-service"        "audit_db"
+run_migration "coding-service"      "services/coding-service"       "coding_db"
 run_migration "ai-service"           "services/ai-service"           "ai_db"
 run_migration "media-service"        "services/media-service"        "media_db"
 

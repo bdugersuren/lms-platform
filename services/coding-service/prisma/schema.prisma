@@ -1,0 +1,148 @@
+// =============================================================================
+// coding-service — Prisma schema
+// Database: coding_db (PostgreSQL)
+// Owns: DmojUserLink, CodeProblemBinding, CodeSubmission, CodeSubmissionCase
+// Outbox/Inbox pattern copied from wallet-service.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── DMOJ user account linkage ─────────────────────────────────────────────────
+enum DmojUserStatus {
+  PENDING
+  LINKED
+  FAILED
+}
+
+model DmojUserLink {
+  id           String         @id @default(uuid())
+  tenantId     String         @default("demo") @map("tenant_id")
+  lmsUserId    String         @map("lms_user_id")
+  dmojUsername String?        @map("dmoj_username")
+  status       DmojUserStatus @default(PENDING)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  @@unique([tenantId, lmsUserId])
+  @@map("dmoj_user_links")
+}
+
+// ── Binding between LMS assignment and DMOJ problem ──────────────────────────
+model CodeProblemBinding {
+  id               String   @id @default(uuid())
+  tenantId         String   @default("demo") @map("tenant_id")
+  assignmentId     String   @unique @map("assignment_id")
+  dmojProblemCode  String   @map("dmoj_problem_code")
+  dmojContestKey   String?  @map("dmoj_contest_key")
+  allowedLanguages String[] @map("allowed_languages")
+  maxScore         Float    @default(100) @map("max_score")
+  passingScore     Float    @default(60) @map("passing_score")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  submissions CodeSubmission[]
+
+  @@map("code_problem_bindings")
+}
+
+// ── Code submission record ────────────────────────────────────────────────────
+enum CodeSubmissionStatus {
+  QUEUED
+  SUBMITTED
+  JUDGING
+  GRADED
+  FAILED
+}
+
+model CodeSubmission {
+  id               String               @id @default(uuid())
+  tenantId         String               @default("demo") @map("tenant_id")
+  bindingId        String               @map("binding_id")
+  assignmentId     String               @map("assignment_id")
+  studentId        String               @map("student_id")
+  lmsSubmissionId  String?              @map("lms_submission_id")
+  dmojSubmissionId Int?                 @unique @map("dmoj_submission_id")
+  language         String
+  sourceHash       String               @map("source_hash")
+  status           CodeSubmissionStatus @default(QUEUED)
+  score            Float?
+  maxScore         Float?               @map("max_score")
+  timeMs           Int?                 @map("time_ms")
+  memoryKb         Int?                 @map("memory_kb")
+  pollCount        Int                  @default(0) @map("poll_count")
+  lastError        String?              @map("last_error")
+  gradedAt         DateTime?            @map("graded_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  binding CodeProblemBinding   @relation(fields: [bindingId], references: [id])
+  cases   CodeSubmissionCase[]
+
+  @@index([assignmentId, studentId])
+  @@index([status])
+  @@map("code_submissions")
+}
+
+// ── Per-testcase result ────────────────────────────────────────────────────────
+model CodeSubmissionCase {
+  id           String   @id @default(uuid())
+  submissionId String   @map("submission_id")
+  caseNumber   Int      @map("case_number")
+  status       String
+  timeMs       Int?     @map("time_ms")
+  memoryKb     Int?     @map("memory_kb")
+  score        Float?
+  maxScore     Float?   @map("max_score")
+
+  submission CodeSubmission @relation(fields: [submissionId], references: [id])
+
+  @@map("code_submission_cases")
+}
+
+// ── Outbox pattern (transactional event publishing) ───────────────────────────
+model EventOutbox {
+  id            String    @id @default(uuid())
+  eventId       String    @unique @map("event_id")
+  eventType     String    @map("event_type")
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id")
+  payload       Json
+  occurredAt    DateTime  @map("occurred_at")
+  publishedAt   DateTime? @map("published_at")
+  attempts      Int       @default(0)
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([publishedAt])
+  @@map("event_outbox")
+}
+
+// ── Inbox pattern (idempotent event consumption) ─────────────────────────────
+model EventInbox {
+  id          String   @id @default(uuid())
+  eventId     String   @unique @map("event_id")
+  eventType   String   @map("event_type")
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@map("event_inbox")
+}
+
+// ── Event failure tracking ────────────────────────────────────────────────────
+model EventFailure {
+  id          String   @id @default(uuid())
+  eventId     String   @map("event_id")
+  eventType   String   @map("event_type")
+  error       String
+  payload     Json
+  failedAt    DateTime @default(now()) @map("failed_at")
+
+  @@map("event_failures")
+}

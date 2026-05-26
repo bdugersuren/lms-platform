@@ -11,6 +11,7 @@ import {
 } from '@/hooks/use-assignment';
 import { clsx } from 'clsx';
 import type { SubmissionStatus } from '@/types/assignment';
+import { CodeSubmissionPanel } from '@/components/assignment/code-submission-panel';
 
 const statusMeta: Record<SubmissionStatus, { label: string; cls: string; icon: string }> = {
   DRAFT: { label: 'Ноорог', cls: 'bg-gray-100 text-gray-600', icon: '📝' },
@@ -158,22 +159,19 @@ export default function AssignmentDetailPage() {
               </div>
             )}
 
-            {isEditable ? (
+            {assignment.type === 'CODE' ? (
+              <CodeSubmissionPanel assignmentId={id} />
+            ) : isEditable ? (
               <div className="space-y-4">
-                {(assignment.type === 'TEXT' || assignment.type === 'CODE') && (
+                {assignment.type === 'TEXT' && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                      {assignment.type === 'CODE' ? 'Код' : 'Хариулт'}
-                    </label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Хариулт</label>
                     <textarea
                       rows={8}
                       value={content || submission?.content || ''}
                       onChange={(e) => setContent(e.target.value)}
-                      placeholder={assignment.type === 'CODE' ? 'Кодоо энд бичнэ үү...' : 'Хариултаа бичнэ үү...'}
-                      className={clsx(
-                        'w-full px-4 py-3 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none',
-                        assignment.type === 'CODE' ? 'font-mono bg-slate-900 text-green-400 border-slate-700' : 'border-gray-200',
-                      )}
+                      placeholder="Хариултаа бичнэ үү..."
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                     />
                   </div>
                 )}

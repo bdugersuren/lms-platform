@@ -38,6 +38,7 @@ declare -A SVC_DB=(
   ["services/media-service"]="media_db"
   ["services/certificate-service"]="certificate_db"
   ["services/analytics-service"]="analytics_db"
+  ["services/coding-service"]="coding_db"
 )
 
 SERVICES=(
@@ -53,6 +54,7 @@ SERVICES=(
   "services/media-service"
   "services/certificate-service"
   "services/analytics-service"
+  "services/coding-service"
 )
 
 SEEDED=0

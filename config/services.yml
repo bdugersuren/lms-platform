@@ -289,6 +289,16 @@ services:
     env_var_prefix: AUDIT
     description: Owns immutable audit logs for compliance, admin operations, and sensitive platform events.
 
+  - name: coding-service
+    kind: backend-service
+    container: lms-coding-service
+    port: 3017
+    host_binding: "127.0.0.1"
+    profile: learn
+    database: coding_db
+    env_var_prefix: CODING
+    description: DMOJ judge adapter — bridges LMS code assignments to self-hosted DMOJ judge for automated grading.
+
   # ── Frontend profile ───────────────────────────────────────────────────────
 
   - name: web

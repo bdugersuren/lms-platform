@@ -27,6 +27,7 @@ SERVICES=(
   "enrollment-service: @lms/enrollment-service  : core"
   "quiz-service     : @lms/quiz-service         : learn"
   "assignment-service: @lms/assignment-service  : learn"
+  "coding-service   : @lms/coding-service       : learn"
   "wallet-service   : @lms/wallet-service       : finance"
   "payment-service  : @lms/payment-service      : finance"
   "notification-service: @lms/notification-service: ops"

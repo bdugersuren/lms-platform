@@ -200,6 +200,36 @@
       "durable": true,
       "auto_delete": false,
       "arguments": {}
+    },
+    {
+      "name": "coding.publisher",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "coding.publisher"
+      }
+    },
+    {
+      "name": "notification.coding-events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "notification.coding-events"
+      }
+    },
+    {
+      "name": "analytics.coding-events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "lms.dead-letter",
+        "x-dead-letter-routing-key": "analytics.coding-events"
+      }
     }
   ],
   "bindings": [
@@ -345,6 +375,30 @@
       "destination": "lms.dead-letter",
       "destination_type": "queue",
       "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "coding.publisher",
+      "destination_type": "queue",
+      "routing_key": "coding.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "notification.coding-events",
+      "destination_type": "queue",
+      "routing_key": "coding.#",
+      "arguments": {}
+    },
+    {
+      "source": "lms.events",
+      "vhost": "/",
+      "destination": "analytics.coding-events",
+      "destination_type": "queue",
+      "routing_key": "coding.#",
       "arguments": {}
     }
   ]

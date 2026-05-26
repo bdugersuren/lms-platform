@@ -6,3 +6,4 @@ export * from './assignment-events';
 export * from './wallet-events';
 export * from './media-events';
 export * from './audit-events';
+export * from './coding-events';

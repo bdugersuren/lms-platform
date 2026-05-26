@@ -36,6 +36,7 @@ DATABASES=(
   media_db
   certificate_db
   analytics_db
+  coding_db
 )
 
 log_step "Dropping and recreating databases"

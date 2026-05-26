@@ -58,6 +58,7 @@ declare -A SVC_DB=(
   ["notification-service"]="notification_db"
   ["analytics-service"]="analytics_db"
   ["audit-service"]="audit_db"
+  ["coding-service"]="coding_db"
   ["ai-service"]="ai_db"
   ["media-service"]="media_db"
 )
@@ -71,6 +72,7 @@ ORDERED_SERVICES=(
   "enrollment-service"
   "quiz-service"
   "assignment-service"
+  "coding-service"
   "wallet-service"
   "payment-service"
   "certificate-service"

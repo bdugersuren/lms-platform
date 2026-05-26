@@ -26,6 +26,7 @@ Full per-section analysis: [`docs/roadmap/analysis.md`](analysis.md) — section
 | ENG-013 | DevOps: Docker profiles, build reliability | Normal | DONE | `dev-usecase.sh`, mem_limit tuned, `health-check.sh` |
 | ENG-014 | Testing strategy: unit, contract, E2E, smoke | Normal | DONE | 10 spec files + contract tests + smoke-test.sh |
 | ENG-015 | Documentation cleanup | Normal | DONE | ports fixed, API README updated, tracker expanded |
+| ENG-016 | DMOJ coding judge integration | High | TODO | coding-service adapter (port 3017), docker-compose.dmoj.yml, shared lms-net, Phase 1 manual binding + polling |
 
 ---
 
@@ -228,6 +229,73 @@ Analysis: `analysis.md` § 14
 - Unit tests: `auth.service.spec.ts`, `token.service.spec.ts`, `wallet.service.spec.ts`, `payment.service.spec.ts`, `certificate.service.spec.ts`, `progress.service.spec.ts`
 - Contract tests: `packages/shared-types/src/events/__tests__/payloads.contract.spec.ts`
 - E2E tests: `auth-service/test/auth.e2e-spec.ts`, `enrollment-service/test/enrollment.e2e-spec.ts`
+
+---
+
+## ENG-016 — DMOJ coding judge integration
+
+Analysis: `analysis.md` § 16
+
+**Problem:** `AssignmentType.CODE` exists in the assignment-service schema but grading is fully manual — an instructor must review and score code submissions by hand. There is no automated judge, no test-case feedback, and no way to enforce objective correctness. The existing assignment → grade → enrollment chain is already wired; what is missing is an automated grader that plugs into it.
+
+**Approach:** A new `coding-service` (NestJS, port 3017, `coding_db`) acts as a proxy grader that bridges LMS assignments to a self-hosted DMOJ judge. DMOJ runs in its own `docker-compose.dmoj.yml` and is reachable through the shared `lms-net` Docker network. The LMS remains the source of truth for users, tenants, assignments, grades, and progress; DMOJ is the source of truth only for raw judge execution.
+
+**Submission flow:**
+```
+Student POST /coding/assignments/:id/submissions
+  → coding-service validates enrollment, creates CodeSubmission (QUEUED)
+  → calls assignment-service REST to create Submission record (lmsSubmissionId)
+  → submits code to DMOJ → stores dmojSubmissionId (SUBMITTED)
+  → polling worker polls DMOJ every 5 s → JUDGING → result ready
+  → calls assignment-service POST /submissions/:lmsSubmissionId/grade
+       → assignment-service emits assignment.submission.graded (unchanged)
+            → enrollment-service updates AssignmentGradeRecord + progress (unchanged)
+  → coding-service publishes coding.submission.graded via outbox
+```
+Neither assignment-service nor enrollment-service requires code changes.
+
+**Network plan:**
+
+| Service | lms-net | dmoj-internal | Host port |
+|---|---|---|---|
+| coding-service | yes | no | 127.0.0.1:3017 |
+| dmoj-site | yes | yes | 127.0.0.1:8081 |
+| dmoj-db (MariaDB) | no | yes | — |
+| dmoj-redis | no | yes | — |
+| dmoj-celery / dmoj-bridged / dmoj-judge | no | yes | — |
+
+**Key deliverables (TODO):**
+- `docker-compose.yml`: add `name: lms-net` to network; add `coding-service` (profile: `learn`, port 3017)
+- `docker-compose.dmoj.yml`: DMOJ full stack with `lms-net` as external network
+- `.env.dmoj.example`: `DMOJ_BASE_URL`, `DMOJ_INTERNAL_SECRET`, `DMOJ_RESULT_SYNC_INTERVAL_MS`
+- `infra/postgres/init.sql`: add `coding_db`
+- `infra/rabbitmq/definitions.json`: add `coding.publisher` queue and `coding.#` binding
+- `packages/shared-types`: add `CODING_SUBMISSION_QUEUED/JUDGING/GRADED/FAILED` event types and typed payloads
+- `services/coding-service/`: full NestJS service with Prisma, outbox (copied from wallet-service), `DmojUserLink`, `CodeProblemBinding`, `CodeSubmission`, `CodeSubmissionCase` models
+- Gateway: add `coding` route to `services.config.ts` + Joi validation in `app.module.ts`
+- `config/services.yml`: add coding-service entry
+- Service-account JWT: seed `coding-system@lms.internal` in auth-service; coding-service uses this to call assignment-service grade endpoint
+- Frontend: replace CODE assignment textarea with language selector + code editor + live judge status + testcase result table
+
+**DMOJ adapter strategy (phased):**
+- **Phase 1** — Admin creates problems in DMOJ UI; instructor manually binds via `POST /coding/assignments/:id/binding { dmojProblemCode }`. Polling worker syncs results every 5 s. No DMOJ source changes.
+- **Phase 2** — `infra/dmoj/lms_bridge/` Express app adds `POST /lms-bridge/users/provision`, `POST /lms-bridge/submissions`, `GET /lms-bridge/submissions/:id`, `POST /lms-bridge/problems/ensure` endpoints authenticated by `X-LMS-Internal-Secret`. Webhook replaces polling.
+
+**Resilience:** DMOJ down → coding-service returns `503 judge unavailable`; LMS assignment page stays functional showing `QUEUED` status; polling retries automatically when DMOJ recovers. Duplicate judge results are blocked by `dmojSubmissionId @unique` constraint.
+
+**Rollout order (12 steps):**
+1. Add `name: lms-net` to `docker-compose.yml` network block
+2. Update `infra/postgres/init.sql` and `infra/rabbitmq/definitions.json`
+3. Add coding event types + payload interfaces to `packages/shared-types`; verify build
+4. Create `docker-compose.dmoj.yml`, `.env.dmoj.example`, DMOJ volumes and config
+5. Scaffold `services/coding-service/` — health, Prisma, messaging, outbox
+6. Run `coding_db` migration; add gateway route; update `config/services.yml` and migration scripts
+7. Add DmojUserLink + CodeProblemBinding CRUD API (instructor binding endpoints)
+8. Add problem info endpoint for student and manual binding instructor UI
+9. Add code submission API and DMOJ polling worker
+10. Wire assignment-service grade REST call + outbox publish for `coding.submission.graded`
+11. Frontend: CODE assignment panel (language selector, editor, status, testcase table)
+12. Phase 2: DMOJ bridge app + webhook-based result sync
 
 ---
 
